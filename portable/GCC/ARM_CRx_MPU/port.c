@@ -77,6 +77,13 @@ PRIVILEGED_DATA static BaseType_t xSchedulerRunning = pdFALSE;
  */
 PRIVILEGED_DATA volatile uint32_t ulICCEOIR = configEOI_ADDRESS;
 
+
+PRIVILEGED_DATA StackType_t
+    pxPrivilegedCallStacks[configMAX_CONCURRENT_TASKS][configSYSTEM_CALL_STACK_SIZE]
+                                                       __attribute__( ( aligned( configSYSTEM_CALL_STACK_SIZE * 0x4U ) ) );
+
+
+PRIVILEGED_DATA volatile UBaseType_t uxPrivStackIndex = 0UL;
 /*---------------------------------------------------------------------------*/
 
 /** @brief Set a FreeRTOS Task's initial context
@@ -221,26 +228,23 @@ StackType_t * pxPortInitialiseStack(
     /* The task will start with a critical nesting count of 0. */
     xMPUSettings->ulContext[ ulContextIndex ] = portNO_CRITICAL_NESTING;
 
-    /* Ensure that the system call stack is double word aligned. */
-    xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer = &(
-        xMPUSettings->xSystemCallStackInfo
-            .ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE - 1 ]
-    );
-    xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer =
-        ( uint32_t * ) ( ( uint32_t ) ( xMPUSettings->xSystemCallStackInfo
-                                            .pulSystemCallStackPointer ) &
-                         ( uint32_t ) ( ~( portBYTE_ALIGNMENT_MASK ) ) );
+    portDISABLE_INTERRUPTS();
+    xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer = pxPrivilegedCallStacks[uxPrivStackIndex++];
+    portENABLE_INTERRUPTS();
+
+    configASSERT(0x0 == xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer[0] );
+
 
     /* This is not NULL only for the duration of a system call. */
     xMPUSettings->xSystemCallStackInfo.pulTaskStackPointer = NULL;
-    /* Set the System Call LR  to go directly to vPortSystemCallExit */
+    /* Set the System Call LR to be vPortSystemCallExit */
     xMPUSettings->xSystemCallStackInfo.pulSystemCallLinkRegister = &vPortSystemCallExit;
     UBaseType_t ulStackIndex;
     /* Fill the System Call Stack with known values for debugging. */
     for( ulStackIndex = 0x0; ulStackIndex < configSYSTEM_CALL_STACK_SIZE; ulStackIndex++ )
     {
-        xMPUSettings->xSystemCallStackInfo.ulSystemCallStackBuffer[ ulStackIndex ] =
-            0x575B | ulStackIndex;
+        xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer[ ulStackIndex ] =
+               ( uint32_t ) &xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer[ ulStackIndex ];
     }
 
     /* Return the address where the context of this task should be restored from*/

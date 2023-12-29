@@ -168,7 +168,7 @@
     /* At this point the SVC stack pointer will be in one of three places:
      * 1. ulContext[51] - This is the bottom of the context inside of the TCB for task saving
      * 1. ulContext[1]  - We reloaded a nested context, the next context to restore is a task context
-     * 2. ulSystemCallStackBuffer[?] - Restoring a nested context inside of an exception handler
+     * 2. pulSystemCallStackPointer[?] - Restoring a nested context inside of an exception handler
     */
 
     /* Restore the register context, first need to load the mode bits */

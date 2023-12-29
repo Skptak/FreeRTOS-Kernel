@@ -152,6 +152,10 @@ extern "C" {
     #endif /* ( configUSE_TICKLESS_IDLE != 0 ) */
 #endif     /* configUSE_TICKLESS_IDLE */
 
+
+#ifndef configMAX_CONCURRENT_TASKS
+    #error Please define the maximum number of concurrent tasks the system will use
+#endif /* configMAX_CONCURRENT_TASKS */
 /* ------------------------- Port Type Definitions ------------------------- */
 
 #include "portmacro_asm.h"
@@ -621,11 +625,6 @@ typedef struct SYSTEM_CALL_STACK_INFO
      */
     void * pulSystemCallLinkRegister;
 
-    /** @brief Buffer to be used when performing a FreeRTOS System Call
-     * @struct xSYSTEM_CALL_STACK_INFO
-     * @ingroup Port Privilege
-     */
-    uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ];
 } xSYSTEM_CALL_STACK_INFO;
 
 /** @brief Per-Task MPU Settings structure stored in the TCB
