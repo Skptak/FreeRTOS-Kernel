@@ -127,6 +127,26 @@ StackType_t * pxPortInitialiseStack(
         xMPUSettings->ulTaskFlags &= ( ~portTASK_IS_PRIVILEGED_FLAG );
         xMPUSettings->ulTaskFlags |= 0x10000000;
         xMPUSettings->ulContext[ ulContextIndex ] = USER_MODE;
+
+        portDISABLE_INTERRUPTS();
+        xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer = pxPrivilegedCallStacks[uxPrivStackIndex++];
+        portENABLE_INTERRUPTS();
+
+        configASSERT(0x0 == xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer[0] );
+
+        /* This structure is only used by unprivileged tasks. */
+        /* This is not NULL only for the duration of a system call. */
+        xMPUSettings->xSystemCallStackInfo.pulTaskStackPointer = NULL;
+        /* Set the System Call LR to be vPortSystemCallExit */
+        xMPUSettings->xSystemCallStackInfo.pulSystemCallLinkRegister = &vPortSystemCallExit;
+        UBaseType_t ulStackIndex;
+        /* Fill the System Call Stack with known values for debugging. */
+        for( ulStackIndex = 0x0; ulStackIndex < configSYSTEM_CALL_STACK_SIZE; ulStackIndex++ )
+        {
+            xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer[ ulStackIndex ] =
+                   ( uint32_t ) &xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer[ ulStackIndex ];
+        }
+
     }
 
     if( ( ( uint32_t ) pxCode & portTHUMB_MODE_ADDRESS ) != 0x00UL )
@@ -227,25 +247,6 @@ StackType_t * pxPortInitialiseStack(
 
     /* The task will start with a critical nesting count of 0. */
     xMPUSettings->ulContext[ ulContextIndex ] = portNO_CRITICAL_NESTING;
-
-    portDISABLE_INTERRUPTS();
-    xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer = pxPrivilegedCallStacks[uxPrivStackIndex++];
-    portENABLE_INTERRUPTS();
-
-    configASSERT(0x0 == xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer[0] );
-
-
-    /* This is not NULL only for the duration of a system call. */
-    xMPUSettings->xSystemCallStackInfo.pulTaskStackPointer = NULL;
-    /* Set the System Call LR to be vPortSystemCallExit */
-    xMPUSettings->xSystemCallStackInfo.pulSystemCallLinkRegister = &vPortSystemCallExit;
-    UBaseType_t ulStackIndex;
-    /* Fill the System Call Stack with known values for debugging. */
-    for( ulStackIndex = 0x0; ulStackIndex < configSYSTEM_CALL_STACK_SIZE; ulStackIndex++ )
-    {
-        xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer[ ulStackIndex ] =
-               ( uint32_t ) &xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer[ ulStackIndex ];
-    }
 
     /* Return the address where the context of this task should be restored from*/
     return ( &xMPUSettings->ulContext[ ulContextIndex ] );
