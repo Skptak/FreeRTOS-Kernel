@@ -117,14 +117,14 @@ PRIVILEGED_FUNCTION static uint32_t prvGetMPURegionSizeSetting(
     if( xRunPrivileged == pdTRUE )
     {
         /* Current Program Status and Control Register */
-        xMPUSettings->ulTaskFlags |= portTASK_IS_PRIVILEGED_FLAG;
+        xMPUSettings->ulTaskFlags |= portPRIVILEGE_BIT;
         xMPUSettings->ulTaskFlags |= 0x1F000000;
         xMPUSettings->ulContext[ ulContextIndex ] = SYS_MODE;
     }
     else
     {
         /* Current Program Status and Control Register */
-        xMPUSettings->ulTaskFlags &= ( ~portTASK_IS_PRIVILEGED_FLAG );
+        xMPUSettings->ulTaskFlags &= portPRIVILEGE_BIT;
         xMPUSettings->ulTaskFlags |= 0x10000000;
         xMPUSettings->ulContext[ ulContextIndex ] = USER_MODE;
     }
@@ -135,6 +135,10 @@ PRIVILEGED_FUNCTION static uint32_t prvGetMPURegionSizeSetting(
         xMPUSettings->ulContext[ ulContextIndex ] |= portTHUMB_MODE_BIT;
         xMPUSettings->ulTaskFlags |= portSTACK_FRAME_HAS_PADDING_FLAG;
     }
+
+    BaseType_t retVal = pdFAIL;
+    retVal = xPortValidateTaskMPUSettings( xMPUSettings );
+    configASSERT( pdPASS == retVal );
 
     /* Decrement ulContextIndex here after setting the CPSR */
     ulContextIndex--;
@@ -250,8 +254,9 @@ PRIVILEGED_FUNCTION static uint32_t prvGetMPURegionSizeSetting(
 
 /*----------------------------------------------------------------------------*/
 
-static uint32_t prvGetMPURegionSizeSetting( uint32_t ulActualSizeInBytes ) /* PRIVILEGED_FUNCTION
-                                                                            */
+/* PRIVILEGED_FUNCTION */ static uint32_t prvGetMPURegionSizeSetting(
+    uint32_t ulActualSizeInBytes
+)
 {
     uint32_t ulRegionSize, ulReturnValue = 4U;
 
@@ -295,10 +300,14 @@ BaseType_t xPortMPURegisterCheck(
     extern uint32_t __privileged_data_end__[];
 #endif /* if defined( __ARMCC_VERSION ) */
 
-    BaseType_t retVal = pdPASS;
+    BaseType_t retVal;
     if( NULL == xMPURegisters )
     {
         retVal = pdFAIL;
+    }
+    else if( 0x0UL == ( xMPURegisters->ulRegionSize & portMPU_REGION_ENABLE ) )
+    {
+        retVal = pdPASS;
     }
     else
     {
@@ -307,6 +316,7 @@ BaseType_t xPortMPURegisterCheck(
         volatile uint32_t ulSize = xMPURegisters->ulRegionSize;
         volatile uint32_t ulSizeMask = 2 << ( xMPURegisters->ulRegionSize >> 1 );
         volatile uint32_t ulAttributes = xMPURegisters->ulRegionAttribute;
+
         /* Make sure the MPU Region Size is a valid value */
         if( ( ulSize < portMPU_SIZE_32B ) || ( ulSize > portMPU_SIZE_4GB ) )
         {
@@ -332,11 +342,13 @@ BaseType_t xPortMPURegisterCheck(
 
         /* Tasks shall not be granted write access to Function Code.
          * Access Permission 0XX means that writes to the memory location are allowed */
+        else if( ( ulBaseAddr < ( uint32_t ) __FLASH_segment_end__ ) && ( ( ulAttributes & portMPU_PRIV_RW_USER_RW_EXEC ) != 0x0UL ) )
+        {
+            retVal = pdFAIL;
+        }
         else
         {
-            retVal =
-                ( ( ulBaseAddr < ( uint32_t ) __FLASH_segment_end__ ) &&
-                  ( ( ulAttributes & portMPU_PRIV_RW_USER_RW_EXEC ) != 0x0UL ) );
+            retVal = pdPASS;
         }
 #if 0
         /** TODO: Should we check if the TEX, Cache, Buffer, and Shared Encoding are valid?
@@ -507,9 +519,6 @@ BaseType_t xPortValidateTaskMPUSettings( xMPU_SETTINGS * xTaskMPUSettings )
             lIndex++;
         }
     }
-    BaseType_t retVal = pdFAIL;
-    retVal = xPortValidateTaskMPUSettings( xMPUSettings );
-    configASSERT( pdPASS == retVal );
 }
 
 /*----------------------------------------------------------------------------*/
@@ -566,7 +575,7 @@ PRIVILEGED_FUNCTION static void prvSetupDefaultMPU( void )
     uint32_t ulRegionLength;
 
     /* Ensure the MPU is disabled */
-    prvMpuDisable();
+    prvMPUDisable();
 
     /* Unprivileged and Privileged Read and Exec MPU Region for Flash */
     ulRegionStart = ( uint32_t ) __FLASH_segment_start__;
@@ -574,7 +583,7 @@ PRIVILEGED_FUNCTION static void prvSetupDefaultMPU( void )
     ulRegionLength = ulRegionEnd - ulRegionStart;
     ulRegionLength = prvGetMPURegionSizeSetting( ulRegionLength ) | portMPU_REGION_ENABLE;
 
-    prvMpuSetRegion(
+    prvMPUSetRegion(
         portUNPRIVILEGED_FLASH_REGION,
         ulRegionStart,
         ulRegionLength,
@@ -586,7 +595,7 @@ PRIVILEGED_FUNCTION static void prvSetupDefaultMPU( void )
     ulRegionEnd = ( uint32_t ) __privileged_functions_end__;
     ulRegionLength = ulRegionEnd - ulRegionStart;
     ulRegionLength = prvGetMPURegionSizeSetting( ulRegionLength ) | portMPU_REGION_ENABLE;
-    prvMpuSetRegion(
+    prvMPUSetRegion(
         portPRIVILEGED_FLASH_REGION,
         ulRegionStart,
         ulRegionLength,
@@ -598,7 +607,7 @@ PRIVILEGED_FUNCTION static void prvSetupDefaultMPU( void )
     ulRegionEnd = ( uint32_t ) __peripherals_end__;
     ulRegionLength = ulRegionEnd - ulRegionStart;
     ulRegionLength = prvGetMPURegionSizeSetting( ulRegionLength ) | portMPU_REGION_ENABLE;
-    prvMpuSetRegion(
+    prvMPUSetRegion(
         portGENERAL_PERIPHERALS_REGION,
         ulRegionStart,
         ulRegionLength,
@@ -610,7 +619,7 @@ PRIVILEGED_FUNCTION static void prvSetupDefaultMPU( void )
     ulRegionEnd = ( uint32_t ) __privileged_data_end__;
     ulRegionLength = ulRegionEnd - ulRegionStart;
     ulRegionLength = prvGetMPURegionSizeSetting( ulRegionLength ) | portMPU_REGION_ENABLE;
-    prvMpuSetRegion(
+    prvMPUSetRegion(
         portPRIVILEGED_RAM_REGION,
         ulRegionStart,
         ulRegionLength,
@@ -618,7 +627,7 @@ PRIVILEGED_FUNCTION static void prvSetupDefaultMPU( void )
     );
 
     /* After setting default regions, enable the MPU */
-    prvMpuEnable();
+    prvMPUEnable();
 }
 
 /* ------------------------------------------------------------------------- */
@@ -714,7 +723,7 @@ PRIVILEGED_FUNCTION static BaseType_t prvTaskCanAccessRegion(
         {
             xAccessGranted = pdFALSE;
         }
-        else if( xTaskMPUSettings->ulTaskFlags & portTASK_IS_PRIVILEGED_FLAG )
+        else if( xTaskMPUSettings->ulTaskFlags & portPRIVILEGE_BIT )
         {
             /* If a task is privileged it is assumed that it can access the buffer */
             xAccessGranted = pdTRUE;
@@ -756,8 +765,7 @@ PRIVILEGED_FUNCTION static BaseType_t prvTaskCanAccessRegion(
     /* Calling task's MPU settings. */
     const xMPU_SETTINGS * xTaskMpuSettings = xTaskGetMPUSettings( NULL );
 
-    if( ( xTaskMpuSettings->ulTaskFlags & portTASK_IS_PRIVILEGED_FLAG ) ==
-        portTASK_IS_PRIVILEGED_FLAG )
+    if( ( xTaskMpuSettings->ulTaskFlags & portPRIVILEGE_BIT ) == portPRIVILEGE_BIT )
     {
         xTaskIsPrivileged = pdTRUE;
     }
@@ -825,8 +833,7 @@ BaseType_t xPortStartScheduler( void )
         ulAccessControlListEntryBit =
             ( ( uint32_t ) lInternalIndexOfKernelObject % portACL_ENTRY_SIZE_BITS );
 
-        if( ( xTaskMpuSettings->ulTaskFlags & portTASK_IS_PRIVILEGED_FLAG ) ==
-            portTASK_IS_PRIVILEGED_FLAG )
+        if( ( xTaskMpuSettings->ulTaskFlags & portPRIVILEGE_BIT ) == portPRIVILEGE_BIT )
         {
             xAccessGranted = pdTRUE;
         }

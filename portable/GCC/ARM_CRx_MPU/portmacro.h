@@ -396,7 +396,7 @@ void vPortStartFirstTask( void );
  *
  * @return void
  */
-void prvMpuEnable( void );
+void prvMPUEnable( void );
 
 /** @brief Disable the onboard MPU
  *
@@ -404,7 +404,7 @@ void prvMpuEnable( void );
  *
  * @return VOID
  */
-void prvMpuDisable( void );
+void prvMPUDisable( void );
 
 /** @brief Assembly routine to set permissions for an MPU Region.
  *
@@ -420,7 +420,7 @@ void prvMpuDisable( void );
  * provided values to the relevant MPU Registers. The inputs to this function
  * are checked internally before it is called in the port.c file.
  */
-void prvMpuSetRegion(
+void prvMPUSetRegion(
     uint32_t ulRegionNumber,
     uint32_t ulBaseAddress,
     uint32_t ulRegionSize,
@@ -455,7 +455,7 @@ BaseType_t xPortIsPrivileged( void );
  */
 #define portIS_PRIVILEGED() xPortIsPrivileged()
 
-/** @brief Check if ulTaskFlags has portTASK_IS_PRIVILEGED_FLAG.
+/** @brief Check if ulTaskFlags has portPRIVILEGE_BIT.
  *
  * @ingroup Port Privilege
  *
@@ -464,8 +464,8 @@ BaseType_t xPortIsPrivileged( void );
  * or not, this function can return a different value than xPortIsPrivileged.
  *
  * @return
- * 0 If pxCurrentTCB's !( ulTaskFlags && portTASK_IS_PRIVILEGED_FLAG )
- * 1 If pxCurrentTCB's ( ulTaskFlags && portTASK_IS_PRIVILEGED_FLAG )
+ * 0 If pxCurrentTCB's !( ulTaskFlags & portPRIVILEGE_BIT )
+ * 1 If pxCurrentTCB's ( ulTaskFlags & portPRIVILEGE_BIT )
  */
 BaseType_t xPortIsTaskPrivileged( void );
 
@@ -682,6 +682,8 @@ typedef struct MPU_SETTINGS
         [ ( configPROTECTED_KERNEL_OBJECT_POOL_SIZE / portACL_ENTRY_SIZE_BITS ) + 1 ];
 #endif
 } xMPU_SETTINGS;
+
+BaseType_t xPortValidateTaskMPUSettings( xMPU_SETTINGS * xTaskMPUSettings );
 
 #ifdef __cplusplus
 } /* extern C */

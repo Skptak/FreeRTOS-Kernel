@@ -297,7 +297,7 @@ svcSystemCallExit:
     /* Load the ulTaskFlag so we can determine if we're going to lower privilege */
     LDM     R11, {R12}
     /* Check if the task is privileged */
-    CMP     R12, #portTASK_IS_PRIVILEGED_FLAG
+    CMP     R12, #portPRIVILEGE_BIT
     /* If the task is privileged we can leave now */
     BEQ     SVC_Handler_Exit
     /* Otherwise, we need to set the SPSR back to USER mode */
@@ -428,16 +428,16 @@ vPortEnableInterrupts:
 
 /* ----------------------------------------------------------------------------------- */
 /** Set MPU Registers using provided values
- * Function: void prvMpuSetRegion
+ * Function: void prvMPUSetRegion
  * Inputs:     uint32_t ulRegionNumber
  * Inputs:     uint32_t ulBaseAddress
  * Inputs:     uint32_t ulRegionSize
  * Inputs:     uint32_t ulRegionPermissions
 */
 .align 4
-.global prvMpuSetRegion
-.type prvMpuSetRegion, %function
-prvMpuSetRegion:
+.global prvMPUSetRegion
+.type prvMPUSetRegion, %function
+prvMPUSetRegion:
     /* Only 15 possible regions, drop all other bits */
     AND     R0,  R0, #15
     /* Select the MPU Region selected by ulRegionNumber */
@@ -454,9 +454,9 @@ prvMpuSetRegion:
 /* ----------------------------------------------------------------------------------- */
 /* Set the Enable bit of the MPU Enable Register to 1. */
 .align 4
-.global prvMpuEnable
-.type prvMpuEnable, %function
-prvMpuEnable:
+.global prvMPUEnable
+.type prvMPUEnable, %function
+prvMPUEnable:
     /* Read the current MPU control register into R0 */
     MRC     p15, #0, R0, c1, c0, #0
     /* Set the enable bit to high */
@@ -473,9 +473,9 @@ prvMpuEnable:
 /* ----------------------------------------------------------------------------------- */
 /* Set the Enable bit of the MPU Enable Register to 0. */
 .align 4
-.global prvMpuDisable
-.type prvMpuDisable, %function
-prvMpuDisable:
+.global prvMPUDisable
+.type prvMPUDisable, %function
+prvMPUDisable:
     /* Read the MPU enable register values into R0 */
     MRC     p15, #0, R0, c1, c0, #0
     /* Perform a bitwise AND of R0 and NOT #1, i.e. clear bit 1 */

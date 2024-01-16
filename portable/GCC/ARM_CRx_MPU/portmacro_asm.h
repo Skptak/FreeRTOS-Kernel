@@ -108,11 +108,6 @@ extern "C" {
  */
 #define portSTACK_FRAME_HAS_PADDING_FLAG ( 1UL << 0UL )
 
-/** @brief Flag uses to mark that a FreeRTOS Task is privileged
- * @ingroup Port Privilege
- */
-#define portTASK_IS_PRIVILEGED_FLAG      ( 1UL << 1UL )
-
 /** @brief SVC Number to use when requesting a context swap.
  * @ingroup Scheduler
  */
