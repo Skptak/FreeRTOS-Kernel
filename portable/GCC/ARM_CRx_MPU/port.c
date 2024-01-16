@@ -235,7 +235,8 @@ PRIVILEGED_FUNCTION static uint32_t prvGetMPURegionSizeSetting(
     );
 
     xSysCallInfo->pulSystemCallStackPointer =
-        ( uint32_t * ) ( ( uint32_t ) ( xSysCallInfo->pulSystemCallStackPointer ) & ( uint32_t ) ( ~( portBYTE_ALIGNMENT_MASK ) ) );
+        ( uint32_t * ) ( ( uint32_t ) ( xSysCallInfo->pulSystemCallStackPointer ) &
+                         ( uint32_t ) ( ~( portBYTE_ALIGNMENT_MASK ) ) );
 
     /* This is not NULL only for the duration of a system call. */
     xSysCallInfo->pulTaskStackPointer = NULL;
@@ -249,9 +250,8 @@ PRIVILEGED_FUNCTION static uint32_t prvGetMPURegionSizeSetting(
 
 /*----------------------------------------------------------------------------*/
 
-/* PRIVILEGED_FUNCTION */ static uint32_t prvGetMPURegionSizeSetting(
-    uint32_t ulActualSizeInBytes
-)
+static uint32_t prvGetMPURegionSizeSetting( uint32_t ulActualSizeInBytes ) /* PRIVILEGED_FUNCTION
+                                                                            */
 {
     uint32_t ulRegionSize, ulReturnValue = 4U;
 
@@ -276,6 +276,133 @@ PRIVILEGED_FUNCTION static uint32_t prvGetMPURegionSizeSetting(
 
 /*----------------------------------------------------------------------------*/
 
+/** @brief Determine if the MPU Register Settings are valid MPU Settings */
+BaseType_t xPortMPURegisterCheck(
+    xMPU_REGION_REGISTERS * xMPURegisters,
+    uint32_t ulTaskFlags
+)
+{
+#if defined( __ARMCC_VERSION )
+    /* Declaration when these variable are defined in code instead of being
+     * exported from linker scripts. */
+    extern uint32_t * __FLASH_segment_end__;
+    extern uint32_t * __privileged_functions_end__;
+    extern uint32_t * __privileged_data_end__;
+#else
+    /* Declaration when these variable are exported from linker scripts. */
+    extern uint32_t __FLASH_segment_end__[];
+    extern uint32_t __privileged_functions_end__[];
+    extern uint32_t __privileged_data_end__[];
+#endif /* if defined( __ARMCC_VERSION ) */
+
+    BaseType_t retVal = pdPASS;
+    if( NULL == xMPURegisters )
+    {
+        retVal = pdFAIL;
+    }
+    else
+    {
+        volatile uint32_t ulBaseAddr = xMPURegisters->ulRegionBaseAddress;
+        /* Bits [5:1] are the MPU Region Size Bits, need to clear the enable bit */
+        volatile uint32_t ulSize = xMPURegisters->ulRegionSize;
+        volatile uint32_t ulSizeMask = 2 << ( xMPURegisters->ulRegionSize >> 1 );
+        volatile uint32_t ulAttributes = xMPURegisters->ulRegionAttribute;
+        /* Make sure the MPU Region Size is a valid value */
+        if( ( ulSize < portMPU_SIZE_32B ) || ( ulSize > portMPU_SIZE_4GB ) )
+        {
+            retVal = pdFAIL;
+        }
+
+        /* Make sure that the Region Base Address is aligned to the size of the region */
+        else if( ( ulBaseAddr % ( ulSizeMask ) ) != 0x0UL )
+        {
+            retVal = pdFAIL;
+        }
+        /* If using subregions, make sure that the size is larger than 256 bytes */
+        else if( ( ( ulSize & ( 0XFF00UL ) ) && ( ulSize < portMPU_SIZE_256B ) ) )
+        {
+            retVal = pdFAIL;
+        }
+
+        /* Unprivileged tasks shall not be granted access to Kernel Code or data. */
+        else if( ( portPRIVILEGE_BIT != ( ulTaskFlags & portPRIVILEGE_BIT ) ) && ( ( ulBaseAddr < ( uint32_t ) __privileged_data_end__ ) || ( ulBaseAddr < ( uint32_t ) __privileged_functions_end__ ) ) )
+        {
+            retVal = pdFAIL;
+        }
+
+        /* Tasks shall not be granted write access to Function Code.
+         * Access Permission 0XX means that writes to the memory location are allowed */
+        else
+        {
+            retVal =
+                ( ( ulBaseAddr < ( uint32_t ) __FLASH_segment_end__ ) &&
+                  ( ( ulAttributes & portMPU_PRIV_RW_USER_RW_EXEC ) != 0x0UL ) );
+        }
+#if 0
+        /** TODO: Should we check if the TEX, Cache, Buffer, and Shared Encoding are valid?
+         * Or should we just assume that users will use the already provided MPU settings? */
+            /* Bit one is the enable bit, if it is not set than the region is not enabled */
+            if( ulAttributes & 0x1UL )
+            {
+                /* MPU Attribute Bits [31:29], 27, 23, 22, 7 and 6 are all reserved.
+                 * Using these bits is invalid, if any are set return an error */
+                if( ulAttributes & 0xE8C000C0 )
+                {
+                    retVal = pdFAIL;
+                }
+                /* Ensure Region is larger than 256 bytes if using a subregion */
+                else
+
+                else if( ulAttributes & )
+            }
+            else
+            {
+                retVal = pdPASS;
+            }
+#endif
+    }
+    return retVal;
+}
+
+BaseType_t xPortValidateTaskMPUSettings( xMPU_SETTINGS * xTaskMPUSettings )
+{
+    BaseType_t retVal = pdPASS;
+    xMPU_SETTINGS * xMPUSettings = xTaskMPUSettings;
+#if 0
+    if( NULL == xTaskParameters )
+    {
+        retVal = pdFAIL;
+    }
+    else
+    {
+        xMPUSettings = xTaskParameters->xTaskMPUSettings;
+    }
+#endif
+    if( NULL == xMPUSettings )
+    {
+        retVal = pdFAIL;
+    }
+    else
+    {
+        for( uint32_t ulRegionNum = 0UL; ulRegionNum < portNUM_CONFIGURABLE_REGIONS;
+             ulRegionNum++ )
+        {
+            if( pdPASS == retVal )
+            {
+                retVal = xPortMPURegisterCheck(
+                    &xMPUSettings->xRegion[ ulRegionNum ],
+                    xMPUSettings->ulTaskFlags
+                );
+            }
+            else
+            {
+                ulRegionNum = portNUM_CONFIGURABLE_REGIONS + 1UL;
+            }
+        }
+    }
+
+    return retVal;
+}
 /** @brief Stores a FreeRTOS Task's MPU Settings in its TCB
  *
  * @param xMPUSettings The memory location in the TCB to store MPU settings
@@ -380,6 +507,9 @@ PRIVILEGED_FUNCTION static uint32_t prvGetMPURegionSizeSetting(
             lIndex++;
         }
     }
+    BaseType_t retVal = pdFAIL;
+    retVal = xPortValidateTaskMPUSettings( xMPUSettings );
+    configASSERT( pdPASS == retVal );
 }
 
 /*----------------------------------------------------------------------------*/
@@ -514,38 +644,46 @@ PRIVILEGED_FUNCTION static BaseType_t prvTaskCanAccessRegion(
     BaseType_t xAccessGranted;
     uint32_t ulRegionEnd = ulRegionStart + ulRegionLength;
 
-    /* Convert the MPU Region Size value to the actual size */
-    uint32_t ulTaskRegionLength = 1 << ( ( xTaskMPURegion->ulRegionSize >> 1 ) + 1U );
-    // uint32_t ulTaskRegionLength = 2 << ( xTaskMPURegion->ulRegionSize >> 1 );
-    uint32_t ulTaskRegionEnd = xTaskMPURegion->ulRegionBaseAddress + ulTaskRegionLength;
-    if( ( ulRegionStart >= xTaskMPURegion->ulRegionBaseAddress ) &&
-        ( ulRegionEnd <= ulTaskRegionEnd ) )
+    /* Check if the MPU Region is enabled */
+    if( 0x1UL != ( xTaskMPURegion->ulRegionSize & 0x1UL ) )
     {
-        /* Unprivileged read is MPU Ctrl Access Bit Value bX1X */
-        if( ( tskMPU_READ_PERMISSION == ulAccessRequested ) &&
-            ( ( portMPU_PRIV_RW_USER_RO_NOEXEC ) &xTaskMPURegion->ulRegionAttribute ) )
+        xAccessGranted = pdFALSE;
+    }
+    else
+    {
+        /* Convert the MPU Region Size value to the actual size */
+        uint32_t ulTaskRegionLength = 2 << ( xTaskMPURegion->ulRegionSize >> 1 );
+        uint32_t ulTaskRegionEnd = xTaskMPURegion->ulRegionBaseAddress +
+                                   ulTaskRegionLength;
+        if( ( ulRegionStart >= xTaskMPURegion->ulRegionBaseAddress ) &&
+            ( ulRegionEnd <= ulTaskRegionEnd ) )
         {
-            xAccessGranted = pdTRUE;
-        }
+            /* Unprivileged read is MPU Ctrl Access Bit Value bX1X */
+            if( ( tskMPU_READ_PERMISSION == ulAccessRequested ) &&
+                ( ( portMPU_PRIV_RW_USER_RO_NOEXEC ) &xTaskMPURegion->ulRegionAttribute
+                ) )
+            {
+                xAccessGranted = pdTRUE;
+            }
 
-        /* Unprivileged Write is MPU Ctrl Access Bit Value b011 */
-        else if( ( tskMPU_WRITE_PERMISSION & ulAccessRequested ) &&
-                ( portMPU_PRIV_RW_USER_RW_NOEXEC ==
-                ( portMPU_PRIV_RW_USER_RW_NOEXEC & xTaskMPURegion->ulRegionAttribute ) ) )
-        {
-            xAccessGranted = pdTRUE;
-        }
+            /* Unprivileged Write is MPU Ctrl Access Bit Value b011 */
+            else if( ( tskMPU_WRITE_PERMISSION & ulAccessRequested ) &&
+                    ( portMPU_PRIV_RW_USER_RW_NOEXEC ==
+                    ( portMPU_PRIV_RW_USER_RW_NOEXEC & xTaskMPURegion->ulRegionAttribute ) ) )
+            {
+                xAccessGranted = pdTRUE;
+            }
 
+            else
+            {
+                xAccessGranted = pdFALSE;
+            }
+        }
         else
         {
             xAccessGranted = pdFALSE;
         }
     }
-    else
-    {
-        xAccessGranted = pdFALSE;
-    }
-
     return xAccessGranted;
 }
 
