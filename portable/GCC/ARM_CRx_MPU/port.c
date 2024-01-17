@@ -77,7 +77,21 @@ PRIVILEGED_DATA static BaseType_t xSchedulerRunning = pdFALSE;
  */
 PRIVILEGED_DATA volatile uint32_t ulICCEOIR = configEOI_ADDRESS;
 
+PRIVILEGED_DATA StackType_t
+    pxPrivilegedCallStacks[ configMAX_CONCURRENT_TASKS ][ configSYSTEM_CALL_STACK_SIZE ]
+    __attribute__( ( aligned( configSYSTEM_CALL_STACK_SIZE * 0x4U ) ) ) = { 0 } ;
+
+PRIVILEGED_DATA UBaseType_t
+    ulPrivStackTracker[ 1UL + ( configMAX_CONCURRENT_TASKS / 32UL ) ] = { 0 } ;
+
 /*---------------------------------------------------------------------------*/
+
+/**
+ * @brief Find an available pxPrivilegedCallStack index and mark it as in-use
+ *
+ * @return StackType_t * Pointer to an available call stack, NULL if none are found.
+ */
+PRIVILEGED_FUNCTION StackType_t * prvGetUnusedCallStackBuffer( void );
 
 /** @brief Returns the smallest valid MPU Region size that can hold a number of bytes.
  *
@@ -118,15 +132,37 @@ PRIVILEGED_FUNCTION static uint32_t prvGetMPURegionSizeSetting(
     {
         /* Current Program Status and Control Register */
         xMPUSettings->ulTaskFlags |= portPRIVILEGE_BIT;
-        xMPUSettings->ulTaskFlags |= 0x1F000000;
         xMPUSettings->ulContext[ ulContextIndex ] = SYS_MODE;
     }
     else
     {
         /* Current Program Status and Control Register */
-        xMPUSettings->ulTaskFlags &= portPRIVILEGE_BIT;
-        xMPUSettings->ulTaskFlags |= 0x10000000;
+        xMPUSettings->ulTaskFlags &= ( ~portPRIVILEGE_BIT );
         xMPUSettings->ulContext[ ulContextIndex ] = USER_MODE;
+
+        /* Get an available privileged call stack buffer */
+        StackType_t * uxCallStackPtr = prvGetUnusedCallStackBuffer();
+
+        /* If ulCallStack is NULL, there are no available call stack buffers to use */
+        configASSERT( NULL != uxCallStackPtr );
+
+        /* Check to make sure the call stack is properly cleared out. */
+        configASSERT( 0x0UL == uxCallStackPtr[ 0 ] );
+        xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer = uxCallStackPtr;
+
+        /* Ensure that the system call stack is double word aligned. */
+        xSYSTEM_CALL_STACK_INFO * xSysCallInfo = &( xMPUSettings->xSystemCallStackInfo );
+        xSysCallInfo->pulSystemCallStackPointer = &( uxCallStackPtr[ configSYSTEM_CALL_STACK_SIZE - 1U ] );
+
+        xSysCallInfo->pulSystemCallStackPointer =
+            ( uint32_t * ) ( ( uint32_t ) ( xSysCallInfo->pulSystemCallStackPointer ) &
+                             ( uint32_t ) ( ~( portBYTE_ALIGNMENT_MASK ) ) );
+
+        /* This is not NULL only for the duration of a system call. */
+        xSysCallInfo->pulTaskStackPointer = NULL;
+
+        /* Set the System Call LR to go directly to vPortSystemCallExit */
+        xSysCallInfo->pulSystemCallLinkRegister = &vPortSystemCallExit;
     }
 
     if( ( ( uint32_t ) pxCode & portTHUMB_MODE_ADDRESS ) != 0x00UL )
@@ -136,12 +172,12 @@ PRIVILEGED_FUNCTION static uint32_t prvGetMPURegionSizeSetting(
         xMPUSettings->ulTaskFlags |= portSTACK_FRAME_HAS_PADDING_FLAG;
     }
 
+    /* Decrement ulContextIndex here after setting the CPSR */
+    ulContextIndex--;
+
     BaseType_t retVal = pdFAIL;
     retVal = xPortValidateTaskMPUSettings( xMPUSettings );
     configASSERT( pdPASS == retVal );
-
-    /* Decrement ulContextIndex here after setting the CPSR */
-    ulContextIndex--;
 
     /** First we load the Memory Location of the Task's function.
      * Task Program Counter */
@@ -232,54 +268,46 @@ PRIVILEGED_FUNCTION static uint32_t prvGetMPURegionSizeSetting(
     /* The task will start with a critical nesting count of 0. */
     xMPUSettings->ulContext[ ulContextIndex ] = portNO_CRITICAL_NESTING;
 
-    /* Ensure that the system call stack is double word aligned. */
-    xSYSTEM_CALL_STACK_INFO * xSysCallInfo = &( xMPUSettings->xSystemCallStackInfo );
-    xSysCallInfo->pulSystemCallStackPointer = &(
-        xSysCallInfo->ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE - 1U ]
-    );
-
-    xSysCallInfo->pulSystemCallStackPointer =
-        ( uint32_t * ) ( ( uint32_t ) ( xSysCallInfo->pulSystemCallStackPointer ) &
-                         ( uint32_t ) ( ~( portBYTE_ALIGNMENT_MASK ) ) );
-
-    /* This is not NULL only for the duration of a system call. */
-    xSysCallInfo->pulTaskStackPointer = NULL;
-
-    /* Set the System Call LR to go directly to vPortSystemCallExit */
-    xSysCallInfo->pulSystemCallLinkRegister = &vPortSystemCallExit;
-
     /* Return the address where the context of this task should be restored from */
     return ( &xMPUSettings->ulContext[ ulContextIndex ] );
 }
 
 /*----------------------------------------------------------------------------*/
 
-/* PRIVILEGED_FUNCTION */ static uint32_t prvGetMPURegionSizeSetting(
-    uint32_t ulActualSizeInBytes
-)
+/* PRIVILEGED_FUNCTION */ StackType_t * prvGetUnusedCallStackBuffer( void )
 {
-    uint32_t ulRegionSize, ulReturnValue = 4U;
+    volatile UBaseType_t * uxTrackerPtr = ulPrivStackTracker;
+    UBaseType_t ulMaxBuffers = 1UL + ( configMAX_CONCURRENT_TASKS / 32UL ) ;
+    StackType_t * ulCallStack = NULL;
 
-    /* 32 is the smallest region size, 31 is the largest valid value for
-     * ulReturnValue. */
-    for( ulRegionSize = 32UL; ulReturnValue < 31UL; ( ulRegionSize <<= 1UL ) )
+    /* Ensure we are not interupted while finding and choosing the call stack */
+    vPortDisableInterrupts();
+
+    /* Loop through the privileged call stack tracker arrays */
+    for( UBaseType_t ulArrayIdx = 0UL; ulArrayIdx < ulMaxBuffers; ulArrayIdx++ )
     {
-        if( ulActualSizeInBytes <= ulRegionSize )
+        /* Look through the indices in the array */
+        for( UBaseType_t ulTrackerIndex = 0UL; ulTrackerIndex < 32UL; ulTrackerIndex++ )
         {
-            break;
-        }
-        else
-        {
-            ulReturnValue++;
+            /* If the bit is low, the index is not in use */
+            if( 0UL == ( ( 1UL << ulTrackerIndex ) & uxTrackerPtr[ ulArrayIdx ] ) )
+            {
+                /* Found an available slot, set the tracker index to the correct stack */
+                ulPrivStackTracker[ ulArrayIdx ] |= 1UL << ulTrackerIndex;
+                ulCallStack = pxPrivilegedCallStacks
+                    [ ulTrackerIndex * ( 1UL + ulArrayIdx ) ];
+
+                /* Set variables to exit the loops, leave bottom bits for debugging */
+                ulTrackerIndex |= 0xFFFF0000UL;
+                ulArrayIdx |= 0xFFFF0000UL;
+            }
         }
     }
+    /* Enable interrupts now that the call stack has been found */
+    vPortEnableInterrupts();
 
-    /* Shift the code by one before returning so it can be written directly
-     * into the the correct bit position of the attribute register. */
-    return ulReturnValue << 1UL;
+    return ulCallStack;
 }
-
-/*----------------------------------------------------------------------------*/
 
 /** @brief Determine if the MPU Register Settings are valid MPU Settings */
 BaseType_t xPortMPURegisterCheck(
@@ -350,28 +378,6 @@ BaseType_t xPortMPURegisterCheck(
         {
             retVal = pdPASS;
         }
-#if 0
-        /** TODO: Should we check if the TEX, Cache, Buffer, and Shared Encoding are valid?
-         * Or should we just assume that users will use the already provided MPU settings? */
-            /* Bit one is the enable bit, if it is not set than the region is not enabled */
-            if( ulAttributes & 0x1UL )
-            {
-                /* MPU Attribute Bits [31:29], 27, 23, 22, 7 and 6 are all reserved.
-                 * Using these bits is invalid, if any are set return an error */
-                if( ulAttributes & 0xE8C000C0 )
-                {
-                    retVal = pdFAIL;
-                }
-                /* Ensure Region is larger than 256 bytes if using a subregion */
-                else
-
-                else if( ulAttributes & )
-            }
-            else
-            {
-                retVal = pdPASS;
-            }
-#endif
     }
     return retVal;
 }
@@ -380,16 +386,6 @@ BaseType_t xPortValidateTaskMPUSettings( xMPU_SETTINGS * xTaskMPUSettings )
 {
     BaseType_t retVal = pdPASS;
     xMPU_SETTINGS * xMPUSettings = xTaskMPUSettings;
-#if 0
-    if( NULL == xTaskParameters )
-    {
-        retVal = pdFAIL;
-    }
-    else
-    {
-        xMPUSettings = xTaskParameters->xTaskMPUSettings;
-    }
-#endif
     if( NULL == xMPUSettings )
     {
         retVal = pdFAIL;
@@ -452,18 +448,23 @@ BaseType_t xPortValidateTaskMPUSettings( xMPU_SETTINGS * xTaskMPUSettings )
     uint32_t lIndex = 0x0;
     uint32_t ul = 0x0;
 
+    uint32_t ulRegionStart;
+    uint32_t ulRegionEnd;
+    uint32_t ulRegionLen;
+    /* Allow Read/Write from User and Privileged modes */
+    uint32_t ulRegionAttr = portMPU_PRIV_RW_USER_RW_NOEXEC |
+                            portMPU_NORMAL_OIWTNOWA_SHARED;
+
     if( xRegions == NULL )
     {
         /* No MPU regions are specified so allow access to all of the RAM. */
-        xMPUSettings->xRegion[ 0 ].ulRegionBaseAddress = ( uint32_t
-        ) __SRAM_segment_start__;
-        xMPUSettings->xRegion[ 0 ].ulRegionSize = ( prvGetMPURegionSizeSetting(
-                                                      ( uint32_t ) __SRAM_segment_end__ -
-                                                      ( uint32_t ) __SRAM_segment_start__
-                                                  ) ) |
-                                                  portMPU_REGION_ENABLE;
-        xMPUSettings->xRegion[ 0 ].ulRegionAttribute = portMPU_PRIV_RW_USER_RW_NOEXEC |
-                                                       portMPU_NORMAL_OIWTNOWA_SHARED;
+        ulRegionStart = ( uint32_t ) __SRAM_segment_start__;
+        ulRegionEnd = ( uint32_t ) __SRAM_segment_end__;
+        ulRegionLen = ulRegionEnd - ulRegionStart;
+        ulRegionLen = prvGetMPURegionSizeSetting( ulRegionLen ) | portMPU_REGION_ENABLE;
+        xMPUSettings->xRegion[ 0 ].ulRegionBaseAddress = ulRegionStart;
+        xMPUSettings->xRegion[ 0 ].ulRegionSize = ulRegionLen;
+        xMPUSettings->xRegion[ 0 ].ulRegionAttribute = ulRegionAttr;
 
         /* Invalidate all other regions. */
         for( ul = 1; ul <= portNUM_CONFIGURABLE_REGIONS; ul++ )
@@ -482,31 +483,29 @@ BaseType_t xPortValidateTaskMPUSettings( xMPU_SETTINGS * xTaskMPUSettings )
 
         if( ulStackDepth > 0 )
         {
-            uint32_t ulSmallestRegion = prvGetMPURegionSizeSetting( ulStackDepth * 0x4 );
             /* Define the region that allows access to the stack. */
-            xMPUSettings->xRegion[ 0 ].ulRegionBaseAddress = ( uint32_t ) pxBottomOfStack;
-            xMPUSettings->xRegion[ 0 ].ulRegionSize = ulSmallestRegion |
-                                                      portMPU_REGION_ENABLE;
-            xMPUSettings->xRegion[ 0 ].ulRegionAttribute = portMPU_PRIV_RW_USER_RW_NOEXEC |
-                                                           portMPU_NORMAL_OIWTNOWA_SHARED;
+            ulRegionStart = ( uint32_t ) pxBottomOfStack;
+            ulRegionLen = prvGetMPURegionSizeSetting( ulStackDepth << 2UL );
+            ulRegionLen |= portMPU_REGION_ENABLE;
+
+            xMPUSettings->xRegion[ 0 ].ulRegionBaseAddress = ulRegionStart;
+            xMPUSettings->xRegion[ 0 ].ulRegionSize = ulRegionLen;
+            xMPUSettings->xRegion[ 0 ].ulRegionAttribute = ulRegionAttr;
         }
 
         for( ul = 1; ul <= portNUM_CONFIGURABLE_REGIONS; ul++ )
         {
             if( ( xRegions[ lIndex ] ).ulLengthInBytes > 0UL )
             {
-                /* Translate the generic region definition contained in
-                 * xRegions into the R4 specific MPU settings that are then
-                 * stored in xMPUSettings. */
-                xMPUSettings->xRegion[ ul ]
-                    .ulRegionBaseAddress = ( uint32_t ) xRegions[ lIndex ].pvBaseAddress;
-                xMPUSettings->xRegion[ ul ]
-                    .ulRegionSize = prvGetMPURegionSizeSetting(
-                                        xRegions[ lIndex ].ulLengthInBytes
-                                    ) |
-                                    portMPU_REGION_ENABLE;
-                xMPUSettings->xRegion[ ul ].ulRegionAttribute = xRegions[ lIndex ]
-                                                                    .ulParameters;
+                ulRegionStart = ( uint32_t ) xRegions[ lIndex ].pvBaseAddress;
+                ulRegionLen = xRegions[ lIndex ].ulLengthInBytes;
+                ulRegionLen = prvGetMPURegionSizeSetting( ulRegionLen );
+                ulRegionLen |= portMPU_REGION_ENABLE;
+                ulRegionAttr = xRegions[ lIndex ].ulParameters;
+
+                xMPUSettings->xRegion[ ul ].ulRegionBaseAddress = ulRegionStart;
+                xMPUSettings->xRegion[ ul ].ulRegionSize = ulRegionLen;
+                xMPUSettings->xRegion[ ul ].ulRegionAttribute = ulRegionAttr;
             }
             else
             {
@@ -519,6 +518,33 @@ BaseType_t xPortValidateTaskMPUSettings( xMPU_SETTINGS * xTaskMPUSettings )
             lIndex++;
         }
     }
+}
+
+/*----------------------------------------------------------------------------*/
+
+/* PRIVILEGED_FUNCTION */ static uint32_t prvGetMPURegionSizeSetting(
+    uint32_t ulActualSizeInBytes
+)
+{
+    uint32_t ulRegionSize, ulReturnValue = 4U;
+
+    /* 32 is the smallest region size, 31 is the largest valid value for
+     * ulReturnValue. */
+    for( ulRegionSize = 32UL; ulReturnValue < 31UL; ( ulRegionSize <<= 1UL ) )
+    {
+        if( ulActualSizeInBytes <= ulRegionSize )
+        {
+            break;
+        }
+        else
+        {
+            ulReturnValue++;
+        }
+    }
+
+    /* Shift the code by one before returning so it can be written directly
+     * into the the correct bit position of the attribute register. */
+    return ulReturnValue << 1UL;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -557,13 +583,13 @@ PRIVILEGED_FUNCTION static void prvSetupDefaultMPU( void )
     /* Sections used for FLASH */
     extern uint32_t __FLASH_segment_start__[];
     extern uint32_t __FLASH_segment_end__[];
-    extern uint32_t __privileged_functions_start__[];
+    //extern uint32_t __privileged_functions_start__[];
     extern uint32_t __privileged_functions_end__[];
 
     /* Sections used for RAM */
     extern uint32_t __SRAM_segment_start__[];
     extern uint32_t __SRAM_segment_end__[];
-    extern uint32_t __privileged_data_start__[];
+    //extern uint32_t __privileged_data_start__[];
     extern uint32_t __privileged_data_end__[];
 
     /* Sections used for system peripherals, such as UART */
@@ -583,13 +609,15 @@ PRIVILEGED_FUNCTION static void prvSetupDefaultMPU( void )
     ulRegionLength = ulRegionEnd - ulRegionStart;
     ulRegionLength = prvGetMPURegionSizeSetting( ulRegionLength ) | portMPU_REGION_ENABLE;
 
+    prvMPUSetBackgroundRegion();
+
     prvMPUSetRegion(
         portUNPRIVILEGED_FLASH_REGION,
         ulRegionStart,
         ulRegionLength,
         portMPU_PRIV_RO_USER_RO_EXEC | portMPU_NORMAL_OIWTNOWA_SHARED
     );
-
+#if 0
     /* Privileged Read and Exec MPU Region for PRIVILEGED_FUNCTIONS. */
     ulRegionStart = ( uint32_t ) __privileged_functions_start__;
     ulRegionEnd = ( uint32_t ) __privileged_functions_end__;
@@ -602,18 +630,6 @@ PRIVILEGED_FUNCTION static void prvSetupDefaultMPU( void )
         portMPU_PRIV_RO_USER_NA_EXEC | portMPU_NORMAL_OIWTNOWA_SHARED
     );
 
-    /* MPU Region for Peripheral Usage */
-    ulRegionStart = ( uint32_t ) __peripherals_start__;
-    ulRegionEnd = ( uint32_t ) __peripherals_end__;
-    ulRegionLength = ulRegionEnd - ulRegionStart;
-    ulRegionLength = prvGetMPURegionSizeSetting( ulRegionLength ) | portMPU_REGION_ENABLE;
-    prvMPUSetRegion(
-        portGENERAL_PERIPHERALS_REGION,
-        ulRegionStart,
-        ulRegionLength,
-        portMPU_PRIV_RW_USER_RW_NOEXEC | portMPU_DEVICE_NONSHAREABLE
-    );
-
     /* Privileged Write and Read, Unprivileged Read, MPU Region for PRIVILEGED_DATA. */
     ulRegionStart = ( uint32_t ) __privileged_data_start__;
     ulRegionEnd = ( uint32_t ) __privileged_data_end__;
@@ -624,6 +640,18 @@ PRIVILEGED_FUNCTION static void prvSetupDefaultMPU( void )
         ulRegionStart,
         ulRegionLength,
         portMPU_PRIV_RW_USER_RO_NOEXEC | portMPU_NORMAL_OIWTNOWA_SHARED
+    );
+#endif
+    /* MPU Region for Peripheral Usage */
+    ulRegionStart = ( uint32_t ) __peripherals_start__;
+    ulRegionEnd = ( uint32_t ) __peripherals_end__;
+    ulRegionLength = ulRegionEnd - ulRegionStart;
+    ulRegionLength = prvGetMPURegionSizeSetting( ulRegionLength ) | portMPU_REGION_ENABLE;
+    prvMPUSetRegion(
+        portGENERAL_PERIPHERALS_REGION,
+        ulRegionStart,
+        ulRegionLength,
+        portMPU_PRIV_RW_USER_RW_NOEXEC | portMPU_DEVICE_NONSHAREABLE
     );
 
     /* After setting default regions, enable the MPU */

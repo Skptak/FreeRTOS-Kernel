@@ -84,6 +84,11 @@ extern "C" {
     #error "This port does not support unprivileged tasks to enter a critical section"
 #endif /* configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS */
 
+
+#ifndef configMAX_CONCURRENT_TASKS
+    #error Define the maximum number of concurrent UNPRIVILEGED tasks you will have.
+#endif /* configMAX_CONCURRENT_TASKS */
+
 /* ------------------------- FreeRTOS Config Check ------------------------- */
 
 /** @brief The size in Bytes that the Privileged System Call Stack should be.
@@ -406,6 +411,18 @@ void prvMPUEnable( void );
  */
 void prvMPUDisable( void );
 
+/** @brief Disable the onboard MPU
+ *
+ * @ingroup MPU Control
+ *
+ * @return VOID
+ * @note Uses the Background Region to create a privileged operating mode background
+ * region
+ * https://developer.arm.com/documentation/ddi0363/g/Memory-Protection-Unit/About-the-MPU/Background-regions?lang=en
+ */
+
+void prvMPUSetBackgroundRegion( void );
+
 /** @brief Assembly routine to set permissions for an MPU Region.
  *
  * @ingroup MPU Control
@@ -629,11 +646,6 @@ typedef struct SYSTEM_CALL_STACK_INFO
      */
     void * pulSystemCallLinkRegister;
 
-    /** @brief Buffer to be used when performing a FreeRTOS System Call
-     * @struct xSYSTEM_CALL_STACK_INFO
-     * @ingroup Port Privilege
-     */
-    uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ];
 } xSYSTEM_CALL_STACK_INFO;
 
 /** @brief Per-Task MPU Settings structure stored in the TCB

@@ -421,10 +421,37 @@ vPortExitCritical:
 .global vPortEnableInterrupts
 .type vPortEnableInterrupts, %function
 vPortEnableInterrupts:
+    /* Save LR so that this function can be used by IRQ mode */
+    PUSH    { LR }
     /* Enable IRQs */
     CPSIE   I
+    /* Pop the saved LR */
+    POP     { LR }
     /* Return to caller */
     BX      LR
+
+/* ----------------------------------------------------------------------------------- */
+/** Set MPU Registers using provided values
+ * Function: void prvMPUSetBackgroundRegion
+ * Inputs:     void
+*/
+.align 4
+.global prvMPUSetBackgroundRegion
+.type prvMPUSetBackgroundRegion, %function
+prvMPUSetBackgroundRegion:
+    /* Need to push a register so as not to clobber this */
+    PUSH    { R0 }
+    /* Read CP15 System Control Register into R0 */
+    MRC     p15, 0, R0, c1, c0, 0
+    /* Set bit 17 so that privileged modes won't trigger unmapped MPU region faults */
+    ORR     R0, R0, #0x20000
+    /* Write the value back out */
+    MCR     p15, 0, R0, c1, c0, 0
+    /* Restore the used register */
+    POP     { R0 }
+    /* Swap back to SVC Mode */
+    BX      LR
+
 
 /* ----------------------------------------------------------------------------------- */
 /** Set MPU Registers using provided values
@@ -557,7 +584,6 @@ switch_before_exit:
     MOV     R0, #0
     /* Set ulPortYieldRequired back to zero */
     STR     R0, [R1]
-
     /* Restore used registers, LR_irq and SPSR before saving the context */
     POP     { R0-R3, R12 }
     /* Load the pushed SPSR from the stack */
