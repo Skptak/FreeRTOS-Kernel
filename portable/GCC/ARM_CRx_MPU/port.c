@@ -46,6 +46,10 @@
 
 #undef MPU_WRAPPERS_INCLUDED_FROM_API_FILE
 
+PRIVILEGED_DATA StackType_t
+    pxPrivilegedCallStacks[ configMAX_CONCURRENT_TASKS ][ configSYSTEM_CALL_STACK_SIZE ]
+    __attribute__( ( aligned( configSYSTEM_CALL_STACK_SIZE * 0x4U ) ) ) = { 0 } ;
+
 /** @brief Variable used to keep track of critical section nesting.
  * @ingroup Critical Sections
  * @note
@@ -55,6 +59,10 @@
  * task context it will be set to 0 when the first task is started.
  */
 PRIVILEGED_DATA volatile uint32_t ulCriticalNesting = 0xFFFF;
+
+PRIVILEGED_DATA UBaseType_t
+    ulPrivStackTracker[ 1UL + ( configMAX_CONCURRENT_TASKS / 32UL ) ] = { 0 } ;
+
 
 /** @brief Set to 1 to pend a context switch from an ISR.
  * @ingroup Interrupt Management
@@ -77,12 +85,6 @@ PRIVILEGED_DATA static BaseType_t xSchedulerRunning = pdFALSE;
  */
 PRIVILEGED_DATA volatile uint32_t ulICCEOIR = configEOI_ADDRESS;
 
-PRIVILEGED_DATA StackType_t
-    pxPrivilegedCallStacks[ configMAX_CONCURRENT_TASKS ][ configSYSTEM_CALL_STACK_SIZE ]
-    __attribute__( ( aligned( configSYSTEM_CALL_STACK_SIZE * 0x4U ) ) ) = { 0 } ;
-
-PRIVILEGED_DATA UBaseType_t
-    ulPrivStackTracker[ 1UL + ( configMAX_CONCURRENT_TASKS / 32UL ) ] = { 0 } ;
 
 /*---------------------------------------------------------------------------*/
 
@@ -342,7 +344,7 @@ BaseType_t xPortMPURegisterCheck(
         volatile uint32_t ulBaseAddr = xMPURegisters->ulRegionBaseAddress;
         /* Bits [5:1] are the MPU Region Size Bits, need to clear the enable bit */
         volatile uint32_t ulSize = xMPURegisters->ulRegionSize;
-        volatile uint32_t ulSizeMask = 2 << ( xMPURegisters->ulRegionSize >> 1 );
+        volatile uint32_t ulSizeMask = 2UL << ( xMPURegisters->ulRegionSize >> 1U );
         volatile uint32_t ulAttributes = xMPURegisters->ulRegionAttribute;
 
         /* Make sure the MPU Region Size is a valid value */
