@@ -84,10 +84,9 @@ extern "C" {
     #error "This port does not support unprivileged tasks to enter a critical section"
 #endif /* configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS */
 
-
-#ifndef configMAX_CONCURRENT_TASKS
+#ifndef configMAX_CONCURRENT_UNPRIVILEGED_TASKS
     #error Define the maximum number of concurrent UNPRIVILEGED tasks you will have.
-#endif /* configMAX_CONCURRENT_TASKS */
+#endif /* configMAX_CONCURRENT_UNPRIVILEGED_TASKS */
 
 /* ------------------------- FreeRTOS Config Check ------------------------- */
 

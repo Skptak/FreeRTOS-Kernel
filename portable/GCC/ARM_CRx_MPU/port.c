@@ -47,8 +47,8 @@
 #undef MPU_WRAPPERS_INCLUDED_FROM_API_FILE
 
 PRIVILEGED_DATA StackType_t
-    pxPrivilegedCallStacks[ configMAX_CONCURRENT_TASKS ][ configSYSTEM_CALL_STACK_SIZE ]
-    __attribute__( ( aligned( configSYSTEM_CALL_STACK_SIZE * 0x4U ) ) ) = { 0 } ;
+    pxPrivilegedCallStacks[ configMAX_CONCURRENT_UNPRIVILEGED_TASKS ][ configSYSTEM_CALL_STACK_SIZE ]
+    __attribute__( ( aligned( configSYSTEM_CALL_STACK_SIZE * 0x4U ) ) ) = { 0 };
 
 /** @brief Variable used to keep track of critical section nesting.
  * @ingroup Critical Sections
@@ -61,8 +61,7 @@ PRIVILEGED_DATA StackType_t
 PRIVILEGED_DATA volatile uint32_t ulCriticalNesting = 0xFFFF;
 
 PRIVILEGED_DATA UBaseType_t
-    ulPrivStackTracker[ 1UL + ( configMAX_CONCURRENT_TASKS / 32UL ) ] = { 0 } ;
-
+    ulPrivStackTracker[ 1UL + ( configMAX_CONCURRENT_UNPRIVILEGED_TASKS / 32UL ) ] = { 0 };
 
 /** @brief Set to 1 to pend a context switch from an ISR.
  * @ingroup Interrupt Management
@@ -84,7 +83,6 @@ PRIVILEGED_DATA static BaseType_t xSchedulerRunning = pdFALSE;
  * @ingroup Interrupt Management
  */
 PRIVILEGED_DATA volatile uint32_t ulICCEOIR = configEOI_ADDRESS;
-
 
 /*---------------------------------------------------------------------------*/
 
@@ -154,7 +152,9 @@ PRIVILEGED_FUNCTION static uint32_t prvGetMPURegionSizeSetting(
 
         /* Ensure that the system call stack is double word aligned. */
         xSYSTEM_CALL_STACK_INFO * xSysCallInfo = &( xMPUSettings->xSystemCallStackInfo );
-        xSysCallInfo->pulSystemCallStackPointer = &( uxCallStackPtr[ configSYSTEM_CALL_STACK_SIZE - 1U ] );
+        xSysCallInfo->pulSystemCallStackPointer = &(
+            uxCallStackPtr[ configSYSTEM_CALL_STACK_SIZE - 1U ]
+        );
 
         xSysCallInfo->pulSystemCallStackPointer =
             ( uint32_t * ) ( ( uint32_t ) ( xSysCallInfo->pulSystemCallStackPointer ) &
@@ -279,7 +279,7 @@ PRIVILEGED_FUNCTION static uint32_t prvGetMPURegionSizeSetting(
 /* PRIVILEGED_FUNCTION */ StackType_t * prvGetUnusedCallStackBuffer( void )
 {
     volatile UBaseType_t * uxTrackerPtr = ulPrivStackTracker;
-    UBaseType_t ulMaxBuffers = 1UL + ( configMAX_CONCURRENT_TASKS / 32UL ) ;
+    UBaseType_t ulMaxBuffers = 1UL + ( configMAX_CONCURRENT_UNPRIVILEGED_TASKS / 32UL );
     StackType_t * ulCallStack = NULL;
 
     /* Ensure we are not interupted while finding and choosing the call stack */
@@ -585,13 +585,11 @@ PRIVILEGED_FUNCTION static void prvSetupDefaultMPU( void )
     /* Sections used for FLASH */
     extern uint32_t __FLASH_segment_start__[];
     extern uint32_t __FLASH_segment_end__[];
-    //extern uint32_t __privileged_functions_start__[];
     extern uint32_t __privileged_functions_end__[];
 
     /* Sections used for RAM */
     extern uint32_t __SRAM_segment_start__[];
     extern uint32_t __SRAM_segment_end__[];
-    //extern uint32_t __privileged_data_start__[];
     extern uint32_t __privileged_data_end__[];
 
     /* Sections used for system peripherals, such as UART */
@@ -613,37 +611,14 @@ PRIVILEGED_FUNCTION static void prvSetupDefaultMPU( void )
 
     prvMPUSetBackgroundRegion();
 
+    /* MPU Region for User Code Segment */
     prvMPUSetRegion(
         portUNPRIVILEGED_FLASH_REGION,
         ulRegionStart,
         ulRegionLength,
         portMPU_PRIV_RO_USER_RO_EXEC | portMPU_NORMAL_OIWTNOWA_SHARED
     );
-#if 0
-    /* Privileged Read and Exec MPU Region for PRIVILEGED_FUNCTIONS. */
-    ulRegionStart = ( uint32_t ) __privileged_functions_start__;
-    ulRegionEnd = ( uint32_t ) __privileged_functions_end__;
-    ulRegionLength = ulRegionEnd - ulRegionStart;
-    ulRegionLength = prvGetMPURegionSizeSetting( ulRegionLength ) | portMPU_REGION_ENABLE;
-    prvMPUSetRegion(
-        portPRIVILEGED_FLASH_REGION,
-        ulRegionStart,
-        ulRegionLength,
-        portMPU_PRIV_RO_USER_NA_EXEC | portMPU_NORMAL_OIWTNOWA_SHARED
-    );
 
-    /* Privileged Write and Read, Unprivileged Read, MPU Region for PRIVILEGED_DATA. */
-    ulRegionStart = ( uint32_t ) __privileged_data_start__;
-    ulRegionEnd = ( uint32_t ) __privileged_data_end__;
-    ulRegionLength = ulRegionEnd - ulRegionStart;
-    ulRegionLength = prvGetMPURegionSizeSetting( ulRegionLength ) | portMPU_REGION_ENABLE;
-    prvMPUSetRegion(
-        portPRIVILEGED_RAM_REGION,
-        ulRegionStart,
-        ulRegionLength,
-        portMPU_PRIV_RW_USER_RO_NOEXEC | portMPU_NORMAL_OIWTNOWA_SHARED
-    );
-#endif
     /* MPU Region for Peripheral Usage */
     ulRegionStart = ( uint32_t ) __peripherals_start__;
     ulRegionEnd = ( uint32_t ) __peripherals_end__;
