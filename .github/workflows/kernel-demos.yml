@@ -197,7 +197,8 @@ jobs:
           sudo apt install autogen gawk libgmp-dev libmpc-dev libmpfr-dev -y
           sudo apt install -y patchutils sharutils zlib1g-dev autoconf2.64
           curl -L -O  https://github.com/mdednev/mb-gcc/releases/download/2021-0623%2B2/gcc-microblaze_10.2.0-2021-0623+2_amd64.deb
-          sudo apt install gcc-microblaze_10.2.0-2021-0623+2_amd64.deb
+          ls -al
+          sudo apt install gcc-microblaze*.deb
           echo -e "::endgroup::"
           which mb-gcc
           mb-gcc --version
