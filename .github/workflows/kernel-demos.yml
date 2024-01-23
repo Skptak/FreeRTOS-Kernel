@@ -200,9 +200,13 @@ jobs:
           sudo apt install -y libnewlib-microblaze-xilinx-elf
           sudo apt install -y binutils-microblaze
           set +e
-          curl -L -O  https://github.com/mdednev/mb-gcc/releases/download/2021-0623%2B2/gcc-microblaze_10.2.0-2021-0623+2_amd64.deb
+          curl -L -O https://github.com/mdednev/mb-gcc/releases/download/2021-0623%2B2/binutils-microblaze_2.35-2021-0623+1_amd64.deb
+          curl -L -O https://github.com/mdednev/mb-gcc/releases/download/2021-0623%2B2/gcc-microblaze_10.2.0-2021-0623+2_amd64.deb
+          curl -L -O https://github.com/mdednev/mb-gcc/releases/download/2021-0623%2B2/libnewlib-microblaze_3.3.0-2021-0623+3_all.deb
           ls -al
-          sudo apt install ./gcc-microblaze*.deb
+          sudo apt install -y ./binutils-microblaze*.deb
+          sudo apt install -y ./gcc-microblaze*.deb
+          sudo apt install -y ./libnewlib-microblaze*.deb
           echo -e "::endgroup::"
           which mb-gcc
           mb-gcc --version
