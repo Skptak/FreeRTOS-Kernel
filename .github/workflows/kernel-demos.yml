@@ -221,7 +221,7 @@ jobs:
         run: |
           # ${{ env.stepName }}
           echo -e "::group::${{ env.bashInfo }} ${{ env.stepName }} ${{ env.bashEnd }}"
-          mb-gcc -mcpu=v9.5 -c
+          mb-gcc -mcpu=v9.5 -c \
             FreeRTOS/Source/portable/GCC/MicroBlazeV9/port.c \
             FreeRTOS/Source/portable/GCC/MicroBlazeV9/portasm.S \
             FreeRTOS/Source/portable/GCC/MicroBlazeV9/port_exceptions.c \
