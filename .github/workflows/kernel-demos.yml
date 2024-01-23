@@ -190,6 +190,7 @@ jobs:
         shell: bash
         run: |
           # ${{ env.stepName }}
+          ls -al
           echo -e "::group::${{ env.bashInfo }} ${{ env.stepName }} ${{ env.bashEnd }}"
           sudo apt update -y
           sudo apt upgrade -y
@@ -225,6 +226,7 @@ jobs:
         working-directory: FreeRTOS
         run: |
           # ${{ env.stepName }}
+          ls -al
           echo -e "::group::${{ env.bashInfo }} ${{ env.stepName }} ${{ env.bashEnd }}"
           mb-gcc -mcpu=v9.5 -c \
             FreeRTOS/Source/portable/GCC/MicroBlazeV9/port.c \
