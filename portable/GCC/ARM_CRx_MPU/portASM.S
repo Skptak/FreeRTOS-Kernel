@@ -41,7 +41,7 @@
     .extern pxCurrentTCB
     .extern uxSystemCallImplementations
     .extern ulPortInterruptNesting
-    .extern ulICCEOIR
+    .extern pxIRQMPUSettings
     .extern ulPortYieldRequired
     .extern __privileged_functions_start__
     .extern __privileged_functions_end__
@@ -55,6 +55,7 @@
     .extern vAssertCalled
     .extern vTaskSwitchContext
     .extern vApplicationIRQHandler
+    .extern pxIRQModeStack
 
 /* ----------------------------------------------------------------------------------- */
 /* Save the register context of a FreeRTOS Task. */
@@ -185,6 +186,9 @@ vPortStartFirstTask:
      * This allows the FreeRTOS Scheduler Tick to start, and therefore
      * starts the FreeRTOS-Kernel.
      */
+    /* Swap to IRQ mode to set IRQ Mode stack pointer to use the static IRQ stack */
+    CPS     #IRQ_MODE
+    LDR     SP, =pxIRQModeStack
     /* Swap to SVC Mode for context restore */
     CPS #SVC_MODE
     /* Load the context of first task, starting the FreeRTOS-Scheduler */
@@ -471,10 +475,10 @@ prvMPUSetRegion:
     MCR     p15, #0, R0, c6, c2, #0
     /* Set the Base Address to be ulBaseAddress */
     MCR     p15, #0, R1, c6, c1, #0
-    /* Set the Access Attributes to be ulRegionPermissions */
-    MCR     p15, #0, R3, c6, c1, #4
     /* Set the Size and Enable bits to be ulRegionSize */
     MCR     p15, #0, R2, c6, c1, #2
+    /* Set the Access Attributes to be ulRegionPermissions */
+    MCR     p15, #0, R3, c6, c1, #4
     /* Return to caller */
     BX      LR
 
@@ -541,9 +545,32 @@ FreeRTOS_IRQ_Handler:
     ADD     R2, R1, #1
     /* Store the value of ulPortInterruptNesting++ back into the variable */
     STR     R2, [R0]
-
-    /* Save Calling Registers */
+    /* Save These values for restore */
     PUSH    { R0-R3, LR }
+    /* Determine if we are nested */
+    CMP     R1, 0x0
+    /* If this is a nested interrupt go straight to the user callback */
+    BNE     UserCallback
+    /* Set an MPU Region around the IRQ Mode Stack */
+    /* Use the portSTACK_REGION to protect the IRQ Mode Stack */
+    MOV     R0, #portSTACK_REGION
+    /* Set R1 to be base address of the IRQ Stack */
+    LDR     R1, =pxIRQModeStack
+    /* Set R2 to be the size of the IRQ Stack */
+    MOV     R2, #portMPU_SIZE_256B | portMPU_REGION_ENABLE
+    /* Set R3 to be Privileged Write Only */
+    MOV     R3, #portMPU_PRIV_RW_USER_NA_EXEC | portMPU_NORMAL_OIWTNOWA_SHARED
+    /* Set the MPU Region around the IRQ Stack */
+    BL      prvMPUSetRegion
+    /* Read CP15 System Control Register into R0 */
+    MRC     p15, 0, R0, c1, c0, 0
+    /* Clear Bit 17 to disable the background region that allows privileged access */
+    BIC     R0, R0, #0x20000
+    /* Write the value back out */
+    MCR     p15, 0, R0, c1, c0, 0
+
+UserCallback:
+
     /* Call the User provided IRQ handler */
     BL      vApplicationIRQHandler
 
@@ -553,6 +580,9 @@ FreeRTOS_IRQ_Handler:
     /* Perform a data and instruction buffer flush */
     DSB
     ISB
+
+    /* Re-enable the MPU Background Region */
+    BL      prvMPUSetBackgroundRegion
 
     /* Restore the previous registers */
     POP     { R0-R3, LR }
@@ -570,11 +600,35 @@ FreeRTOS_IRQ_Handler:
     LDR     R0, [R1]
     /* Check if the value of ulPortYieldRequired is zero */
     CMP     R0, #0
-    /* If it is non-zero select a new task to run */
+    /* Use previous comparison to exit the IRQ Handler */
     BNE     switch_before_exit
 
 exit_without_switch:
-    /* No context switch. Restore used registers, LR_irq and SPSR before returning. */
+    /* Load the pointer to the current task's Task Control Block (TCB) */
+    LDR     R0, =pxCurrentTCB
+    /* Load the actual TCB into LR */
+    LDR     R0, [R0]
+    /* Set R1 to the second member of the TCB struct, xMPUSettings */
+    ADD     R1, R0, #0x8
+    /* Load the first per-task MPU region into R5 */
+    MOV     R5, #portFIRST_CONFIGURABLE_REGION
+    /* Load values of struct MPU_REGION_REGISTERS into R2-R4 */
+    LDMIA   R1!, {R2-R4}
+    /* Load the values set in xMPU_REGION_REGISTERS
+        * R2 Will hold ulRegionSize
+        * R3 will hold ulRegionAttribute
+        * R4 will hold ulRegionBaseAddress
+        * R5 will hold the MPU Region number */
+
+    /* Select the MPU Region using R5 */
+    MCR     p15, #0, R5, c6, c2, #0
+    /* Set the MPU Region Base Address using ulRegionBaseAddress */
+    MCR     p15, #0, R4, c6, c1, #0
+    /* Set the MPU Region Access Attributes using ulRegionAttribute */
+    MCR     p15, #0, R3, c6, c1, #4
+    /* Set the MPU Region Size, and if the region is enabled using ulRegionSize */
+    MCR     p15, #0, R2, c6, c1, #2
+    /* Restore pushed registers */
     POP     { R0-R3, R12 }
     /* Return from exception, load pre-exception PC and CPSR */
     RFE     SP!

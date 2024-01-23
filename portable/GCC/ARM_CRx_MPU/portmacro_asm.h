@@ -503,6 +503,9 @@ extern "C" {
 #define portSYSTEM_CALL_INFO_OFFSET \
     ( ( ( portTOTAL_NUM_REGIONS_IN_TCB * 3U ) + ( MAX_CONTEXT_SIZE ) + 1 ) * 4U )
 
+
+#define portIRQ_MPU_SETTINGS ( portMPU_NORMAL_OIWTNOWA_SHARED | portMPU_PRIV_RW_USER_NA_EXEC )
+
 #ifdef __cplusplus
 } /* extern C */
 #endif

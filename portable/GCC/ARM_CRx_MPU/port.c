@@ -50,6 +50,10 @@ PRIVILEGED_DATA StackType_t
     pxPrivilegedCallStacks[ configMAX_CONCURRENT_UNPRIVILEGED_TASKS ][ configSYSTEM_CALL_STACK_SIZE ]
     __attribute__( ( aligned( configSYSTEM_CALL_STACK_SIZE * 0x4U ) ) ) = { 0 };
 
+
+StackType_t pxIRQModeStack[ configSYSTEM_CALL_STACK_SIZE ]
+        __attribute__( ( aligned( configSYSTEM_CALL_STACK_SIZE * 0x4U ) ) ) = { 0 };
+
 /** @brief Variable used to keep track of critical section nesting.
  * @ingroup Critical Sections
  * @note
@@ -79,11 +83,7 @@ PRIVILEGED_DATA volatile uint32_t ulPortInterruptNesting = 0UL;
  */
 PRIVILEGED_DATA static BaseType_t xSchedulerRunning = pdFALSE;
 
-/** @brief Used in portASM.S's IRQ Handler to clear an interrupt.
- * @ingroup Interrupt Management
- */
-PRIVILEGED_DATA volatile uint32_t ulICCEOIR = configEOI_ADDRESS;
-
+PRIVILEGED_DATA static uint32_t pxIRQMPUSettings[4] = { 0 };
 /*---------------------------------------------------------------------------*/
 
 /**
@@ -600,16 +600,22 @@ PRIVILEGED_FUNCTION static void prvSetupDefaultMPU( void )
     uint32_t ulRegionEnd;
     uint32_t ulRegionLength;
 
+    pxIRQMPUSettings[0] = ( uint32_t ) pxIRQModeStack;
+    pxIRQMPUSettings[1] = prvGetMPURegionSizeSetting(configSYSTEM_CALL_STACK_SIZE);
+    pxIRQMPUSettings[1] |= portMPU_REGION_ENABLE;
+    pxIRQMPUSettings[2] |= portMPU_PRIV_RW_USER_NA_EXEC | portMPU_NORMAL_OIWTNOWA_SHARED;
+
     /* Ensure the MPU is disabled */
     prvMPUDisable();
+
+    /* Enable the MPU background region to allow privileged access to RAM */
+    prvMPUSetBackgroundRegion();
 
     /* Unprivileged and Privileged Read and Exec MPU Region for Flash */
     ulRegionStart = ( uint32_t ) __FLASH_segment_start__;
     ulRegionEnd = ( uint32_t ) __FLASH_segment_end__;
     ulRegionLength = ulRegionEnd - ulRegionStart;
     ulRegionLength = prvGetMPURegionSizeSetting( ulRegionLength ) | portMPU_REGION_ENABLE;
-
-    prvMPUSetBackgroundRegion();
 
     /* MPU Region for User Code Segment */
     prvMPUSetRegion(
