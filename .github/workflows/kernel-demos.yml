@@ -193,12 +193,16 @@ jobs:
           echo -e "::group::${{ env.bashInfo }} ${{ env.stepName }} ${{ env.bashEnd }}"
           sudo apt update -y
           sudo apt upgrade -y
-          sudo apt install build-essential m4 debhelper bison texinfo dejagnu flex -y
-          sudo apt install autogen gawk libgmp-dev libmpc-dev libmpfr-dev -y
+          sudo apt install -y build-essential m4 debhelper bison texinfo dejagnu flex
+          sudo apt install -y autogen gawk libgmp-dev libmpc-dev libmpfr-dev
           sudo apt install -y patchutils sharutils zlib1g-dev autoconf2.64
+          set -e
+          sudo apt install -y libnewlib-microblaze-xilinx-elf
+          sudo apt install -y binutils-microblaze
+          set +e
           curl -L -O  https://github.com/mdednev/mb-gcc/releases/download/2021-0623%2B2/gcc-microblaze_10.2.0-2021-0623+2_amd64.deb
           ls -al
-          sudo apt install gcc-microblaze*.deb
+          sudo apt install ./gcc-microblaze*.deb
           echo -e "::endgroup::"
           which mb-gcc
           mb-gcc --version
