@@ -749,6 +749,7 @@ static void prvRestoreContextOfFirstTask( void )
 {
     __asm volatile
     (
+        "   .syntax unified                     \n"
         " ldr r0, =0xE000ED08                   \n" /* Use the NVIC offset register to locate the stack. */
         " ldr r0, [r0]                          \n"
         " ldr r0, [r0]                          \n"
@@ -757,19 +758,18 @@ static void prvRestoreContextOfFirstTask( void )
         /*------------ Program MPU. ------------ */
         " ldr r3, pxCurrentTCBConst2            \n" /* r3 = pxCurrentTCBConst2. */
         " ldr r2, [r3]                          \n" /* r2 = pxCurrentTCB. */
-        " add r2, r2, #4                        \n" /* r2 = Second item in the TCB which is xMPUSettings. */
+        " adds r2, r2, #4                        \n" /* r2 = Second item in the TCB which is xMPUSettings. */
         "                                       \n"
         " dmb                                   \n" /* Complete outstanding transfers before disabling MPU. */
         " ldr r0, =0xe000ed94                   \n" /* MPU_CTRL register. */
         " ldr r3, [r0]                          \n" /* Read the value of MPU_CTRL. */
-        " bic r3, #1                            \n" /* r3 = r3 & ~1 i.e. Clear the bit 0 in r3. */
+        " ldr r1, #1                            \n"   
+        " bics r3, r3, r1                       \n" /* r3 = r3 & ~1 i.e. Clear the bit 0 in r3. */
         " str r3, [r0]                          \n" /* Disable MPU. */
         "                                       \n"
         " ldr r0, =0xe000ed9c                   \n" /* Region Base Address register. */
-        " ldmia r2!, {r4-r7}                   \n" /* Read 4 sets of MPU registers [MPU Region # 0 - 2]. */
-        " ldmia r2!, {r8-r11}                   \n" /* Read 4 sets of MPU registers [MPU Region # 3 - 4]. */
-        " stmia r0!, {r4-r11}                    \n" /* Write 4 sets of MPU registers [MPU Region # 0 - 2]. */
-        " stmia r0!, {r8-r11}                    \n" /* Write 4 sets of MPU registers [MPU Region # 3 - 4]. */
+        " ldmia r2!, {r4-r11}                   \n" /* Read 4 sets of MPU registers [MPU Region # 0 - 2]. */
+        " stmia r0,  {r4-r11}                    \n" /* Write 4 sets of MPU registers [MPU Region # 0 - 2]. */
         "                                       \n"
         " ldr r0, =0xe000ed94                   \n" /* MPU_CTRL register. */
         " ldr r3, [r0]                          \n" /* Read the value of MPU_CTRL. */
