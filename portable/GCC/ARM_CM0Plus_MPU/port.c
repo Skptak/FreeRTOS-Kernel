@@ -749,7 +749,7 @@ static void prvRestoreContextOfFirstTask( void )
 {
     __asm volatile
     (
-        "   .syntax unified                     \n"
+        " .syntax unified                     \n"
         " ldr r0, =0xE000ED08                   \n" /* Use the NVIC offset register to locate the stack. */
         " ldr r0, [r0]                          \n"
         " ldr r0, [r0]                          \n"
@@ -768,12 +768,14 @@ static void prvRestoreContextOfFirstTask( void )
         " str r3, [r0]                          \n" /* Disable MPU. */
         "                                       \n"
         " ldr r0, =0xe000ed9c                   \n" /* Region Base Address register. */
-        " ldmia r2!, {r4-r11}                   \n" /* Read 4 sets of MPU registers [MPU Region # 0 - 2]. */
-        " stmia r0,  {r4-r11}                    \n" /* Write 4 sets of MPU registers [MPU Region # 0 - 2]. */
+        " ldmia r2!, {r4-r7}                    \n" /* Read 2 sets of MPU registers [MPU Region # 0 - 1]. */
+        " stmia r0!, {r4-r7}                    \n" /* Write 2 sets of MPU registers [MPU Region # 0 - 2]. */
+        " ldmia r2!, {r4-r7}                   \n" /* Read 2 sets of MPU registers [MPU Region # 2 - 3]. */
+        " stmia r0!,  {r4-r7}                   \n" /* Write 2 sets of MPU registers [MPU Region # 2 - 3]. */
         "                                       \n"
         " ldr r0, =0xe000ed94                   \n" /* MPU_CTRL register. */
         " ldr r3, [r0]                          \n" /* Read the value of MPU_CTRL. */
-        " orr r3, #1                            \n" /* r3 = r3 | 1 i.e. Set the bit 0 in r3. */
+        " orrs r3, r3, r1                          \n" /* r3 = r3 | 1 i.e. Set the bit 0 in r3. */
         " str r3, [r0]                          \n" /* Enable MPU. */
         " dsb                                   \n" /* Force memory writes before continuing. */
         "                                       \n"
@@ -782,8 +784,10 @@ static void prvRestoreContextOfFirstTask( void )
         " ldr r2, [r3]                          \n" /* r2 = pxCurrentTCB. */
         " ldr r1, [r2]                          \n" /* r1 = Location of saved context in TCB. */
         "                                       \n"
-        " ldmdb r1!, {r0, r4-r7}               \n" /* r0 contains PSP after the hardware had saved context. r4-r11 contain hardware saved context. */
-        " ldmdb r1!, {r7-r11}               \n" /* r0 contains PSP after the hardware had saved context. r4-r11 contain hardware saved context. */
+        " subs r1, r1, #0x4                     \n" /* Set r0 back to the location of hardware saved context. */
+        " ldmia r1!, {r0}                        \n" /* r0 contains PSP after the hardware had saved context. */
+        " ldmia r1!, {r4-r7}                    \n" /* r4-r11 contain hardware saved context. */
+        " ldmia r1!, {r7-r11}                   \n" /* r0 contains PSP after the hardware had saved context. r4-r11 contain hardware saved context. */
         " msr psp, r0                           \n"
         " stmia r0!, {r4-r7}                    \n" /* Copy the hardware saved context on the task stack. */
         " stmia r0, {r8-r11}                    \n" /* Copy the hardware saved context on the task stack. */
@@ -999,15 +1003,8 @@ void xPortPendSVHandler( void )
         " mrs r0, psp                           \n"
         " isb                                   \n"
         "                                       \n"
-        " add r0, r0, #0x20                     \n" /* Move r0 to location where s0 is saved. */
-        " tst lr, #0x10                         \n"
-        " ittt eq                               \n"
-        " vstmiaeq r1!, {s16-s31}               \n" /* Store s16-s31. */
-        " vldmiaeq r0, {s0-s16}                 \n" /* Copy hardware saved FP context into s0-s16. */
-        " vstmiaeq r1!, {s0-s16}                \n" /* Store hardware saved FP context. */
-        " sub r0, r0, #0x20                     \n" /* Set r0 back to the location of hardware saved context. */
-        "                                       \n"
-        " stmia r1!, {r3-r11, lr}               \n" /* Store CONTROL register, r4-r11 and LR. */
+        " stmia r1!, {r3-r11, lr}               \n" /* Store CONTROL register, r4-r7 and LR. */
+        " stmia r1!, {r3-r11, lr}               \n" /* Store CONTROL register, r7-r11 and LR. */
         " ldmia r0, {r4-r11}                    \n" /* Copy hardware saved context into r4-r11. */
         " stmia r1!, {r0, r4-r11}               \n" /* Store original PSP (after hardware has saved context) and the hardware saved context. */
         " str r1, [r2]                          \n" /* Save the location from where the context should be restored as the first member of TCB. */
@@ -1119,22 +1116,6 @@ __attribute__( ( weak ) ) void vPortSetupTimerInterrupt( void )
     /* Configure SysTick to interrupt at the requested rate. */
     portNVIC_SYSTICK_LOAD_REG = ( configSYSTICK_CLOCK_HZ / configTICK_RATE_HZ ) - 1UL;
     portNVIC_SYSTICK_CTRL_REG = ( portNVIC_SYSTICK_CLK | portNVIC_SYSTICK_INT | portNVIC_SYSTICK_ENABLE );
-}
-/*-----------------------------------------------------------*/
-
-/* This is a naked function. */
-static void vPortEnableVFP( void )
-{
-    __asm volatile
-    (
-        "   ldr.w r0, =0xE000ED88       \n" /* The FPU enable bits are in the CPACR. */
-        "   ldr r1, [r0]                \n"
-        "                               \n"
-        "   orr r1, r1, #( 0xf << 20 )  \n" /* Enable CP10 and CP11 coprocessors, then save back. */
-        "   str r1, [r0]                \n"
-        "   bx r14                      \n"
-        "   .ltorg                      \n"
-    );
 }
 /*-----------------------------------------------------------*/
 
