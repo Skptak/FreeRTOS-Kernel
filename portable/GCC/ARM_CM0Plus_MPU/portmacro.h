@@ -74,6 +74,12 @@ typedef unsigned long    UBaseType_t;
 #else
     #error configTICK_TYPE_WIDTH_IN_BITS set to unsupported tick type width.
 #endif
+
+/*
+ * Starts the scheduler by restoring the context of the first task to run.
+ */
+void prvRestoreContextOfFirstTask( void ) __attribute__( ( naked ) );
+
 /*-----------------------------------------------------------*/
 
 /* MPU specific constants. */

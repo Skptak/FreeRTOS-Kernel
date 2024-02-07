@@ -28,8 +28,8 @@
 
 /*---------------------------------------------------------------------------*/
 
-    .arm
-    .cpu 
+    .thumb
+    .cpu cortex-m0plus
     .syntax unified
     .section freertos_system_calls
 #define FREERTOS_ASSEMBLY
@@ -73,12 +73,15 @@ vPortSystemCallExit:
 .weak xPortIsPrivileged
 .type xPortIsPrivileged, %function
 xPortIsPrivileged:
-    /* Load value of control register into R0 */
+    /* Push R1 before using it */
+    PUSH    { R1 }
+    //ldr r0, =#4
+    /* Load value of CONTROL into R0 */
     MRS     R0, CONTROL
     /* Check if we're in user mode */
-    AND     R0, R0, #1
-    /* Return to the caller */
-    BLX     LR
+    ANDS    R0, R0, R1
+    /* Restore the pushed register */
+    POP     { R1 }
 
 /*-------------------------------------------------------------------------------*/
 #if 0
@@ -97,14 +100,15 @@ ulPortCountLeadingZeros:
 /* ------------------- End of Port Specific System Calls ------------------- */
 
 .macro processorInUserMode
-    /* Push R0 before using it */
-    PUSH    {R0}
+    /* Push R0 and R1 before using them */
+    PUSH    {R0, R1}
     /* Load value of SPSR into R0 */
     MRS     R0, CONTROL
+    MOVS    R1, #1
     /* Check if we're in user mode */
-    ANDS    R0, R0, #1
+    ANDS    R0, R0, R1
     /* Restore the pushed register */
-    POP     {R0}
+    POP     {R0, R1}
 .endm
 
 /*---------------------------------------------------------------------------*/
@@ -122,7 +126,7 @@ MPU_xTaskGetTickCount:
     BNE     MPU_xTaskGetTickCount_Privileged
         SVC     #SYSTEM_CALL_xTaskGetTickCount
     MPU_xTaskGetTickCount_Privileged:
-        B        MPU_xTaskGetTickCountImpl
+        BL  MPU_xTaskGetTickCountImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -139,7 +143,7 @@ MPU_uxTaskGetNumberOfTasks:
     BNE     MPU_uxTaskGetNumberOfTasks_Privileged
         SVC     #SYSTEM_CALL_uxTaskGetNumberOfTasks
     MPU_uxTaskGetNumberOfTasks_Privileged:
-        B       MPU_uxTaskGetNumberOfTasksImpl
+        BL       MPU_uxTaskGetNumberOfTasksImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -154,9 +158,9 @@ MPU_uxTaskGetNumberOfTasks:
 MPU_vTaskSetTimeOutState:
     processorInUserMode
     BNE     MPU_vTaskSetTimeOutState_Privileged
-        SVC     #SYSTEM_CALL_vTaskSetTimeOutState
+    SVC     #SYSTEM_CALL_vTaskSetTimeOutState
     MPU_vTaskSetTimeOutState_Privileged:
-        B        MPU_vTaskSetTimeOutStateImpl
+        BL        MPU_vTaskSetTimeOutStateImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -174,7 +178,7 @@ MPU_xTaskCheckForTimeOut:
     BNE     MPU_xTaskCheckForTimeOut_Privileged
         SVC     #SYSTEM_CALL_xTaskCheckForTimeOut
     MPU_xTaskCheckForTimeOut_Privileged:
-        B        MPU_xTaskCheckForTimeOutImpl
+        BL        MPU_xTaskCheckForTimeOutImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -194,7 +198,7 @@ MPU_xQueueGenericSend:
     BNE     MPU_xQueueGenericSend_Privileged
         SVC     #SYSTEM_CALL_xQueueGenericSend
     MPU_xQueueGenericSend_Privileged:
-        B        MPU_xQueueGenericSendImpl
+        BL        MPU_xQueueGenericSendImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -211,7 +215,7 @@ MPU_uxQueueMessagesWaiting:
     BNE     MPU_uxQueueMessagesWaiting_Privileged
         SVC     #SYSTEM_CALL_uxQueueMessagesWaiting
     MPU_uxQueueMessagesWaiting_Privileged:
-        B        MPU_uxQueueMessagesWaitingImpl
+        BL        MPU_uxQueueMessagesWaitingImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -228,7 +232,7 @@ MPU_uxQueueSpacesAvailable:
     BNE     MPU_uxQueueSpacesAvailable_Privileged
         SVC     #SYSTEM_CALL_uxQueueSpacesAvailable
     MPU_uxQueueSpacesAvailable_Privileged:
-        B        MPU_uxQueueSpacesAvailableImpl
+        BL        MPU_uxQueueSpacesAvailableImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -247,7 +251,7 @@ MPU_xQueueReceive:
     BNE     MPU_xQueueReceive_Privileged
         SVC     #SYSTEM_CALL_xQueueReceive
     MPU_xQueueReceive_Privileged:
-        B        MPU_xQueueReceiveImpl
+        BL       MPU_xQueueReceiveImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -266,7 +270,7 @@ MPU_xQueuePeek:
     BNE     MPU_xQueuePeek_Privileged
         SVC     #SYSTEM_CALL_xQueuePeek
     MPU_xQueuePeek_Privileged:
-        B        MPU_xQueuePeekImpl
+        BL       MPU_xQueuePeekImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -284,7 +288,7 @@ MPU_xQueueSemaphoreTake:
     BNE     MPU_xQueueSemaphoreTake_Privileged
         SVC     #SYSTEM_CALL_xQueueSemaphoreTake
     MPU_xQueueSemaphoreTake_Privileged:
-        B        MPU_xQueueSemaphoreTakeImpl
+        BL       MPU_xQueueSemaphoreTakeImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -301,7 +305,7 @@ MPU_xEventGroupWaitBitsEntry:
     BNE     MPU_xEventGroupWaitBits_Privileged
         SVC     #SYSTEM_CALL_xEventGroupWaitBits
     MPU_xEventGroupWaitBits_Privileged:
-        B        MPU_xEventGroupWaitBitsImpl
+        BL       MPU_xEventGroupWaitBitsImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -319,7 +323,7 @@ MPU_xEventGroupClearBits:
     BNE     MPU_xEventGroupClearBits_Privileged
         SVC     #SYSTEM_CALL_xEventGroupClearBits
     MPU_xEventGroupClearBits_Privileged:
-        B        MPU_xEventGroupClearBitsImpl
+        BL       MPU_xEventGroupClearBitsImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -337,7 +341,7 @@ MPU_xEventGroupSetBits:
     BNE     MPU_xEventGroupSetBits_Privileged
         SVC     #SYSTEM_CALL_xEventGroupSetBits
     MPU_xEventGroupSetBits_Privileged:
-        B        MPU_xEventGroupSetBitsImpl
+        BL       MPU_xEventGroupSetBitsImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -357,7 +361,7 @@ MPU_xEventGroupSync:
     BNE     MPU_xEventGroupSync_Privileged
         SVC     #SYSTEM_CALL_xEventGroupSync
     MPU_xEventGroupSync_Privileged:
-        B        MPU_xEventGroupSyncImpl
+        BL       MPU_xEventGroupSyncImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -377,7 +381,7 @@ MPU_xStreamBufferSend:
     BNE     MPU_xStreamBufferSend_Privileged
         SVC     #SYSTEM_CALL_xStreamBufferSend
     MPU_xStreamBufferSend_Privileged:
-        B        MPU_xStreamBufferSendImpl
+        BL       MPU_xStreamBufferSendImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -397,7 +401,7 @@ MPU_xStreamBufferReceive:
     BNE     MPU_xStreamBufferReceive_Privileged
         SVC     #SYSTEM_CALL_xStreamBufferReceive
     MPU_xStreamBufferReceive_Privileged:
-        B        MPU_xStreamBufferReceiveImpl
+        BL       MPU_xStreamBufferReceiveImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -414,7 +418,7 @@ MPU_xStreamBufferIsFull:
     BNE     MPU_xStreamBufferIsFull_Privileged
         SVC     #SYSTEM_CALL_xStreamBufferIsFull
     MPU_xStreamBufferIsFull_Privileged:
-        B        MPU_xStreamBufferIsFullImpl
+        BL       MPU_xStreamBufferIsFullImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -431,7 +435,7 @@ MPU_xStreamBufferIsEmpty:
     BNE     MPU_xStreamBufferIsEmpty_Privileged
         SVC     #SYSTEM_CALL_xStreamBufferIsEmpty
     MPU_xStreamBufferIsEmpty_Privileged:
-        B        MPU_xStreamBufferIsEmptyImpl
+        BL       MPU_xStreamBufferIsEmptyImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -448,7 +452,7 @@ MPU_xStreamBufferSpacesAvailable:
     BNE     MPU_xStreamBufferSpacesAvailable_Privileged
         SVC     #SYSTEM_CALL_xStreamBufferSpacesAvailable
     MPU_xStreamBufferSpacesAvailable_Privileged:
-        B        MPU_xStreamBufferSpacesAvailableImpl
+        BL       MPU_xStreamBufferSpacesAvailableImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -465,7 +469,7 @@ MPU_xStreamBufferBytesAvailable:
     BNE     MPU_xStreamBufferBytesAvailable_Privileged
         SVC     #SYSTEM_CALL_xStreamBufferBytesAvailable
     MPU_xStreamBufferBytesAvailable_Privileged:
-        B        MPU_xStreamBufferBytesAvailableImpl
+        BL       MPU_xStreamBufferBytesAvailableImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -483,7 +487,7 @@ MPU_xStreamBufferSetTriggerLevel:
     BNE     MPU_xStreamBufferSetTriggerLevel_Privileged
         SVC     #SYSTEM_CALL_xStreamBufferSetTriggerLevel
     MPU_xStreamBufferSetTriggerLevel_Privileged:
-        B        MPU_xStreamBufferSetTriggerLevelImpl
+        BL       MPU_xStreamBufferSetTriggerLevelImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -500,7 +504,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
     BNE     MPU_xStreamBufferNextMessageLengthBytes_Privileged
         SVC     #SYSTEM_CALL_xStreamBufferNextMessageLengthBytes
     MPU_xStreamBufferNextMessageLengthBytes_Privileged:
-        B        MPU_xStreamBufferNextMessageLengthBytesImpl
+        BL       MPU_xStreamBufferNextMessageLengthBytesImpl
 
 /*---------------------------------------------------------------------------*/
 
@@ -519,7 +523,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTaskDelayUntil_Privileged
                 SVC     #SYSTEM_CALL_xTaskDelayUntil
         MPU_xTaskDelayUntil_Privileged:
-                B        MPU_xTaskDelayUntilImpl
+                BL       MPU_xTaskDelayUntilImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -542,7 +546,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTaskAbortDelay_Privileged
                 SVC     #SYSTEM_CALL_xTaskAbortDelay
         MPU_xTaskAbortDelay_Privileged:
-                B        MPU_xTaskAbortDelayImpl
+                BL       MPU_xTaskAbortDelayImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -565,7 +569,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_vTaskDelay_Privileged
                 SVC     #SYSTEM_CALL_vTaskDelay
         MPU_vTaskDelay_Privileged:
-                B        MPU_vTaskDelayImpl
+                BL       MPU_vTaskDelayImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -588,7 +592,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_uxTaskPriorityGet_Privileged
                 SVC     #SYSTEM_CALL_uxTaskPriorityGet
         MPU_uxTaskPriorityGet_Privileged:
-                B        MPU_uxTaskPriorityGetImpl
+                BL       MPU_uxTaskPriorityGetImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -611,7 +615,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_eTaskGetState_Privileged
                 SVC     #SYSTEM_CALL_eTaskGetState
         MPU_eTaskGetState_Privileged:
-                B        MPU_eTaskGetStateImpl
+                BL       MPU_eTaskGetStateImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -637,7 +641,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_vTaskGetInfo_Privileged
                 SVC     #SYSTEM_CALL_vTaskGetInfo
         MPU_vTaskGetInfo_Privileged:
-                B        MPU_vTaskGetInfoImpl
+                BL       MPU_vTaskGetInfoImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -656,7 +660,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_uxTaskGetSystemState_Privileged
                 SVC     #SYSTEM_CALL_uxTaskGetSystemState
         MPU_uxTaskGetSystemState_Privileged:
-                B        MPU_uxTaskGetSystemStateImpl
+                BL       MPU_uxTaskGetSystemStateImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -673,7 +677,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_uxEventGroupGetNumber_Privileged
                 SVC     #SYSTEM_CALL_uxEventGroupGetNumber
         MPU_uxEventGroupGetNumber_Privileged:
-                B        MPU_uxEventGroupGetNumberImpl
+                BL       MPU_uxEventGroupGetNumberImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -691,7 +695,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_vEventGroupSetNumber_Privileged
                 SVC     #SYSTEM_CALL_vEventGroupSetNumber
         MPU_vEventGroupSetNumber_Privileged:
-                B        MPU_vEventGroupSetNumberImpl
+                BL       MPU_vEventGroupSetNumberImpl
 
     /*-----------------------------------------------------------------------*/
 #endif /* if ( configUSE_TRACE_FACILITY == 1 ) */
@@ -712,7 +716,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTaskGetIdleTaskHandle_Privileged
                 SVC     #SYSTEM_CALL_xTaskGetIdleTaskHandle
         MPU_xTaskGetIdleTaskHandle_Privileged:
-                B        MPU_xTaskGetIdleTaskHandleImpl
+                BL       MPU_xTaskGetIdleTaskHandleImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -735,7 +739,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_vTaskSuspend_Privileged
                 SVC     #SYSTEM_CALL_vTaskSuspend
         MPU_vTaskSuspend_Privileged:
-                B        MPU_vTaskSuspendImpl
+                BL       MPU_vTaskSuspendImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -752,7 +756,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_vTaskResume_Privileged
                 SVC     #SYSTEM_CALL_vTaskResume
         MPU_vTaskResume_Privileged:
-                B        MPU_vTaskResumeImpl
+                BL       MPU_vTaskResumeImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -775,7 +779,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_ulTaskGetRunTimeCounter_Privileged
                 SVC     #SYSTEM_CALL_ulTaskGetRunTimeCounter
         MPU_ulTaskGetRunTimeCounter_Privileged:
-                B        MPU_ulTaskGetRunTimeCounterImpl
+                BL       MPU_ulTaskGetRunTimeCounterImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -792,7 +796,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_ulTaskGetRunTimePercent_Privileged
                 SVC     #SYSTEM_CALL_ulTaskGetRunTimePercent
         MPU_ulTaskGetRunTimePercent_Privileged:
-                B        MPU_ulTaskGetRunTimePercentImpl
+                BL       MPU_ulTaskGetRunTimePercentImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -813,7 +817,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
             BNE     MPU_ulTaskGetIdleRunTimePercent_Privileged
                         SVC     #SYSTEM_CALL_ulTaskGetIdleRunTimePercent
             MPU_ulTaskGetIdleRunTimePercent_Privileged:
-                        B        MPU_ulTaskGetIdleRunTimePercentImpl
+                        BL       MPU_ulTaskGetIdleRunTimePercentImpl
 
         /*-------------------------------------------------------------------*/
 
@@ -830,7 +834,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
             BNE     MPU_ulTaskGetIdleRunTimeCounter_Privileged
                         SVC     #SYSTEM_CALL_ulTaskGetIdleRunTimeCounter
             MPU_ulTaskGetIdleRunTimeCounter_Privileged:
-                        B        MPU_ulTaskGetIdleRunTimeCounterImpl
+                        BL       MPU_ulTaskGetIdleRunTimeCounterImpl
 
         /*-------------------------------------------------------------------*/
 
@@ -855,7 +859,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_vTaskSetApplicationTaskTag_Privileged
                 SVC     #SYSTEM_CALL_vTaskSetApplicationTaskTag
         MPU_vTaskSetApplicationTaskTag_Privileged:
-                B        MPU_vTaskSetApplicationTaskTagImpl
+                BL       MPU_vTaskSetApplicationTaskTagImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -872,7 +876,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTaskGetApplicationTaskTag_Privileged
                 SVC     #SYSTEM_CALL_xTaskGetApplicationTaskTag
         MPU_xTaskGetApplicationTaskTag_Privileged:
-                B        MPU_xTaskGetApplicationTaskTagImpl
+                BL       MPU_xTaskGetApplicationTaskTagImpl
 
     /*-----------------------------------------------------------------------*/
 #endif /* if ( configUSE_APPLICATION_TASK_TAG == 1 ) */
@@ -896,7 +900,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_vTaskSetThreadLocalStoragePointer_Privileged
                 SVC     #SYSTEM_CALL_vTaskSetThreadLocalStoragePointer
         MPU_vTaskSetThreadLocalStoragePointer_Privileged:
-                B        MPU_vTaskSetThreadLocalStoragePointerImpl
+                BL       MPU_vTaskSetThreadLocalStoragePointerImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -914,7 +918,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_pvTaskGetThreadLocalStoragePointer_Privileged
                 SVC     #SYSTEM_CALL_pvTaskGetThreadLocalStoragePointer
         MPU_pvTaskGetThreadLocalStoragePointer_Privileged:
-                B        MPU_pvTaskGetThreadLocalStoragePointerImpl
+                BL       MPU_pvTaskGetThreadLocalStoragePointerImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -937,7 +941,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_uxTaskGetStackHighWaterMark_Privileged
                 SVC     #SYSTEM_CALL_uxTaskGetStackHighWaterMark
         MPU_uxTaskGetStackHighWaterMark_Privileged:
-                B        MPU_uxTaskGetStackHighWaterMarkImpl
+                BL       MPU_uxTaskGetStackHighWaterMarkImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -961,7 +965,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_uxTaskGetStackHighWaterMark2_Privileged
                 SVC     #SYSTEM_CALL_uxTaskGetStackHighWaterMark2
         MPU_uxTaskGetStackHighWaterMark2_Privileged:
-                B        MPU_uxTaskGetStackHighWaterMark2Impl
+                BL       MPU_uxTaskGetStackHighWaterMark2Impl
 
     /*-----------------------------------------------------------------------*/
 
@@ -985,7 +989,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTaskGetCurrentTaskHandle_Privileged
                 SVC     #SYSTEM_CALL_xTaskGetCurrentTaskHandle
         MPU_xTaskGetCurrentTaskHandle_Privileged:
-                B        MPU_xTaskGetCurrentTaskHandleImpl
+                BL       MPU_xTaskGetCurrentTaskHandleImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1008,7 +1012,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTaskGetSchedulerState_Privileged
                 SVC     #SYSTEM_CALL_xTaskGetSchedulerState
         MPU_xTaskGetSchedulerState_Privileged:
-                B        MPU_xTaskGetSchedulerStateImpl
+                BL       MPU_xTaskGetSchedulerStateImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1031,7 +1035,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xQueueGetMutexHolder_Privileged
                 SVC     #SYSTEM_CALL_xQueueGetMutexHolder
         MPU_xQueueGetMutexHolder_Privileged:
-                B        MPU_xQueueGetMutexHolderImpl
+                BL       MPU_xQueueGetMutexHolderImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1055,7 +1059,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xQueueTakeMutexRecursive_Privileged
                 SVC     #SYSTEM_CALL_xQueueTakeMutexRecursive
         MPU_xQueueTakeMutexRecursive_Privileged:
-                B        MPU_xQueueTakeMutexRecursiveImpl
+                BL       MPU_xQueueTakeMutexRecursiveImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1072,7 +1076,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xQueueGiveMutexRecursive_Privileged
                 SVC     #SYSTEM_CALL_xQueueGiveMutexRecursive
         MPU_xQueueGiveMutexRecursive_Privileged:
-                B        MPU_xQueueGiveMutexRecursiveImpl
+                BL       MPU_xQueueGiveMutexRecursiveImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1096,7 +1100,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xQueueSelectFromSet_Privileged
                 SVC     #SYSTEM_CALL_xQueueSelectFromSet
         MPU_xQueueSelectFromSet_Privileged:
-                B        MPU_xQueueSelectFromSetImpl
+                BL       MPU_xQueueSelectFromSetImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1114,7 +1118,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xQueueAddToSet_Privileged
                 SVC     #SYSTEM_CALL_xQueueAddToSet
         MPU_xQueueAddToSet_Privileged:
-                B        MPU_xQueueAddToSetImpl
+                BL       MPU_xQueueAddToSetImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1138,7 +1142,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_vQueueAddToRegistry_Privileged
                 SVC     #SYSTEM_CALL_vQueueAddToRegistry
         MPU_vQueueAddToRegistry_Privileged:
-                B        MPU_vQueueAddToRegistryImpl
+                BL       MPU_vQueueAddToRegistryImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1155,7 +1159,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_vQueueUnregisterQueue_Privileged
                 SVC     #SYSTEM_CALL_vQueueUnregisterQueue
         MPU_vQueueUnregisterQueue_Privileged:
-                B        MPU_vQueueUnregisterQueueImpl
+                BL       MPU_vQueueUnregisterQueueImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1172,7 +1176,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_pcQueueGetName_Privileged
                 SVC     #SYSTEM_CALL_pcQueueGetName
         MPU_pcQueueGetName_Privileged:
-                B        MPU_pcQueueGetNameImpl
+                BL       MPU_pcQueueGetNameImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1195,7 +1199,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_pvTimerGetTimerID_Privileged
                 SVC     #SYSTEM_CALL_pvTimerGetTimerID
         MPU_pvTimerGetTimerID_Privileged:
-                B        MPU_pvTimerGetTimerIDImpl
+                BL       MPU_pvTimerGetTimerIDImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1213,7 +1217,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_vTimerSetTimerID_Privileged
                 SVC     #SYSTEM_CALL_vTimerSetTimerID
         MPU_vTimerSetTimerID_Privileged:
-                B        MPU_vTimerSetTimerIDImpl
+                BL       MPU_vTimerSetTimerIDImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1230,7 +1234,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTimerIsTimerActive_Privileged
                 SVC     #SYSTEM_CALL_xTimerIsTimerActive
         MPU_xTimerIsTimerActive_Privileged:
-                B        MPU_xTimerIsTimerActiveImpl
+                BL       MPU_xTimerIsTimerActiveImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1247,7 +1251,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTimerGetTimerDaemonTaskHandle_Privileged
                 SVC     #SYSTEM_CALL_xTimerGetTimerDaemonTaskHandle
         MPU_xTimerGetTimerDaemonTaskHandle_Privileged:
-                B        MPU_xTimerGetTimerDaemonTaskHandleImpl
+                BL       MPU_xTimerGetTimerDaemonTaskHandleImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1264,7 +1268,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTimerGenericCommandFromTask_Privileged
                 SVC     #SYSTEM_CALL_xTimerGenericCommandFromTask
         MPU_xTimerGenericCommandFromTask_Privileged:
-                B        MPU_xTimerGenericCommandFromTaskImpl
+                BL       MPU_xTimerGenericCommandFromTaskImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1282,7 +1286,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_pcTimerGetName_Privileged
                 SVC     #SYSTEM_CALL_pcTimerGetName
         MPU_pcTimerGetName_Privileged:
-                B        MPU_pcTimerGetNameImpl
+                BL       MPU_pcTimerGetNameImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1300,7 +1304,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_vTimerSetReloadMode_Privileged
                 SVC     #SYSTEM_CALL_vTimerSetReloadMode
         MPU_vTimerSetReloadMode_Privileged:
-                B        MPU_vTimerSetReloadModeImpl
+                BL       MPU_vTimerSetReloadModeImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1317,7 +1321,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTimerGetReloadMode_Privileged
                 SVC     #SYSTEM_CALL_xTimerGetReloadMode
         MPU_xTimerGetReloadMode_Privileged:
-                B        MPU_xTimerGetReloadModeImpl
+                BL       MPU_xTimerGetReloadModeImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1334,7 +1338,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_uxTimerGetReloadMode_Privileged
                 SVC     #SYSTEM_CALL_uxTimerGetReloadMode
         MPU_uxTimerGetReloadMode_Privileged:
-                B        MPU_uxTimerGetReloadModeImpl
+                BL       MPU_uxTimerGetReloadModeImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1351,7 +1355,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTimerGetPeriod_Privileged
                 SVC     #SYSTEM_CALL_xTimerGetPeriod
         MPU_xTimerGetPeriod_Privileged:
-                B        MPU_xTimerGetPeriodImpl
+                BL       MPU_xTimerGetPeriodImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1368,7 +1372,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTimerGetExpiryTime_Privileged
                 SVC     #SYSTEM_CALL_xTimerGetExpiryTime
         MPU_xTimerGetExpiryTime_Privileged:
-                B        MPU_xTimerGetExpiryTimeImpl
+                BL       MPU_xTimerGetExpiryTimeImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1388,7 +1392,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTaskGenericNotify_Privileged
                 SVC     #SYSTEM_CALL_xTaskGenericNotify
         MPU_xTaskGenericNotify_Privileged:
-                B        MPU_xTaskGenericNotifyImpl
+                BL       MPU_xTaskGenericNotifyImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1405,7 +1409,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTaskGenericNotifyWait_Privileged
                 SVC     #SYSTEM_CALL_xTaskGenericNotifyWait
         MPU_xTaskGenericNotifyWait_Privileged:
-                B        MPU_xTaskGenericNotifyWaitImpl
+                BL       MPU_xTaskGenericNotifyWaitImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1424,7 +1428,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_ulTaskGenericNotifyTake_Privileged
                 SVC     #SYSTEM_CALL_ulTaskGenericNotifyTake
         MPU_ulTaskGenericNotifyTake_Privileged:
-                B        MPU_ulTaskGenericNotifyTakeImpl
+                BL       MPU_ulTaskGenericNotifyTakeImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1442,7 +1446,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_xTaskGenericNotifyStateClear_Privileged
                 SVC     #SYSTEM_CALL_xTaskGenericNotifyStateClear
         MPU_xTaskGenericNotifyStateClear_Privileged:
-                B        MPU_xTaskGenericNotifyStateClearImpl
+                BL       MPU_xTaskGenericNotifyStateClearImpl
 
     /*-----------------------------------------------------------------------*/
 
@@ -1461,7 +1465,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
         BNE     MPU_ulTaskGenericNotifyValueClear_Privileged
                 SVC     #SYSTEM_CALL_ulTaskGenericNotifyValueClear
         MPU_ulTaskGenericNotifyValueClear_Privileged:
-                B        MPU_ulTaskGenericNotifyValueClearImpl
+                BL       MPU_ulTaskGenericNotifyValueClearImpl
 
     /*-----------------------------------------------------------------------*/
 

@@ -38,6 +38,7 @@
 /* Scheduler includes. */
 #include "FreeRTOS.h"
 #include "task.h"
+#include "portmacro.h"
 #include "mpu_syscall_numbers.h"
 
 #ifndef __VFP_FP__
@@ -174,10 +175,6 @@ void xPortPendSVHandler( void ) __attribute__( ( naked ) ) PRIVILEGED_FUNCTION;
 void xPortSysTickHandler( void ) PRIVILEGED_FUNCTION;
 void vPortSVCHandler( void ) __attribute__( ( naked ) ) PRIVILEGED_FUNCTION;
 
-/*
- * Starts the scheduler by restoring the context of the first task to run.
- */
-static void prvRestoreContextOfFirstTask( void ) __attribute__( ( naked ) ) PRIVILEGED_FUNCTION;
 
 /*
  * C portion of the SVC handler.  The SVC handler is split between an asm entry
@@ -359,39 +356,47 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
     return &( xMPUSettings->ulContext[ 19 ] );
 }
 /*-----------------------------------------------------------*/
-
+#if 0
 #if ( configUSE_MPU_WRAPPERS_V1 == 0 )
 
     void vPortSVCHandler( void ) /* __attribute__( ( naked ) ) PRIVILEGED_FUNCTION */
     {
         __asm volatile
         (
-            ".syntax unified                \n"
-            ".extern vSVCHandler_C          \n"
-            ".extern vSystemCallEnter       \n"
-            ".extern vSystemCallExit        \n"
-            "                               \n"
-            "tst lr, #4                     \n"
-            "ite eq                         \n"
-            "mrseq r0, msp                  \n"
-            "mrsne r0, psp                  \n"
-            "                               \n"
-            "ldr r1, [r0, #24]              \n"
-            "ldrb r2, [r1, #-2]             \n"
-            "cmp r2, %0                     \n"
-            "blt syscall_enter              \n"
-            "cmp r2, %1                     \n"
-            "beq syscall_exit               \n"
-            "b vSVCHandler_C                \n"
-            "                               \n"
-            "syscall_enter:                 \n"
-            "    mov r1, lr                 \n"
-            "    b vSystemCallEnter         \n"
-            "                               \n"
-            "syscall_exit:                  \n"
-            "    mov r1, lr                 \n"
-            "    b vSystemCallExit          \n"
-            "                               \n"
+            " .syntax unified                \n"
+            " .extern vSVCHandler_C          \n"
+            " .extern vSystemCallEnter       \n"
+            " .extern vSystemCallExit        \n"
+            "                                \n"
+            " ldr r0, =#4                     \n"
+            " mov r1, lr                     \n"
+            " tst r1, r0                     \n"
+            " beq load_msp                   \n"
+            " mrs r0, psp                    \n"
+            " b svc_num_load                 \n"
+            " load_msp:                      \n"
+            "    mrs r0, msp                 \n"
+            "                                \n"
+            " svc_num_load:                         \n"
+            " ldr r1, [r0, #24]                     \n"
+            " subs r1, r1, #2                       \n"
+            " ldr r2, [r1]                          \n"
+            " ldr r3, =#NUM_SYSTEM_CALLS            \n"
+            " cmp r2, r3                            \n"
+            " blt syscall_enter                     \n"
+            " ldr  r3, =#portSVC_SYSTEM_CALL_EXIT   \n"
+            " cmp r2, r3                            \n"
+            " beq syscall_exit                      \n"
+            " b vSVCHandler_C                       \n"
+            "                                \n"
+            " syscall_enter:                 \n"
+            "     mov r1, lr                 \n"
+            "     b vSystemCallEnter         \n"
+            "                                \n"
+            " syscall_exit:                  \n"
+            "     mov r1, lr                 \n"
+            "     b vSystemCallExit          \n"
+            "                                \n"
             : /* No outputs. */
             : "i" ( NUM_SYSTEM_CALLS ), "i" ( portSVC_SYSTEM_CALL_EXIT )
             : "r0", "r1", "r2", "memory"
@@ -419,6 +424,8 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
     }
 
 #endif /* #if ( configUSE_MPU_WRAPPERS_V1 == 0 ) */
+
+#endif
 /*-----------------------------------------------------------*/
 
 void vSVCHandler_C( uint32_t * pulParam ) /* PRIVILEGED_FUNCTION */
@@ -449,7 +456,7 @@ void vSVCHandler_C( uint32_t * pulParam ) /* PRIVILEGED_FUNCTION */
     {
         case portSVC_START_SCHEDULER:
             portNVIC_SHPR2_REG |= portNVIC_SVC_PRI;
-            prvRestoreContextOfFirstTask();
+            vPortStartFirstTask();
             break;
 
         case portSVC_YIELD:
@@ -475,9 +482,11 @@ void vSVCHandler_C( uint32_t * pulParam ) /* PRIVILEGED_FUNCTION */
                 {
                     __asm volatile
                     (
-                        "   mrs r1, control     \n" /* Obtain current control value. */
-                        "   bic r1, #1          \n" /* Set privilege bit. */
-                        "   msr control, r1     \n" /* Write back new control value. */
+                        " .syntax unified       \n"
+                        " movs  r0, #1          \n"
+                        " mrs   r1, control     \n" /* Obtain current control value. */
+                        " bics  r1, r0          \n" /* Set privilege bit. */
+                        " msr   control, r1     \n" /* Write back new control value. */
                         ::: "r1", "memory"
                     );
                 }
@@ -487,9 +496,11 @@ void vSVCHandler_C( uint32_t * pulParam ) /* PRIVILEGED_FUNCTION */
             case portSVC_RAISE_PRIVILEGE:
                 __asm volatile
                 (
-                    "   mrs r1, control     \n" /* Obtain current control value. */
-                    "   bic r1, #1          \n" /* Set privilege bit. */
-                    "   msr control, r1     \n" /* Write back new control value. */
+                    " .syntax unified       \n"
+                    " movs  r0, #1          \n"
+                    " mrs   r1, control     \n" /* Obtain current control value. */
+                    " bics  r1, r0          \n" /* Set privilege bit. */
+                    " msr   control, r1     \n" /* Write back new control value. */
                     ::: "r1", "memory"
                 );
                 break;
@@ -547,21 +558,8 @@ void vSVCHandler_C( uint32_t * pulParam ) /* PRIVILEGED_FUNCTION */
         {
             pulSystemCallStack = pxMpuSettings->xSystemCallStackInfo.pulSystemCallStack;
 
-            if( ( ulLR & portEXC_RETURN_STACK_FRAME_TYPE_MASK ) == 0UL )
-            {
-                /* Extended frame i.e. FPU in use. */
-                ulStackFrameSize = 26;
-                __asm volatile (
-                    " vpush {s0}         \n" /* Trigger lazy stacking. */
-                    " vpop  {s0}         \n" /* Nullify the affect of the above instruction. */
-                    ::: "memory"
-                    );
-            }
-            else
-            {
-                /* Standard frame i.e. FPU not in use. */
-                ulStackFrameSize = 8;
-            }
+            /* Standard frame i.e. FPU not in use. */
+            ulStackFrameSize = 8;
 
             /* Make space on the system call stack for the stack frame. */
             pulSystemCallStack = pulSystemCallStack - ulStackFrameSize;
@@ -577,9 +575,11 @@ void vSVCHandler_C( uint32_t * pulParam ) /* PRIVILEGED_FUNCTION */
 
             /* Raise the privilege for the duration of the system call. */
             __asm volatile (
-                " mrs r1, control     \n" /* Obtain current control value. */
-                " bic r1, #1          \n" /* Clear nPRIV bit. */
-                " msr control, r1     \n" /* Write back new control value. */
+                " .syntax unified       \n"
+                " movs  r0, #1          \n"
+                " mrs   r1, control     \n" /* Obtain current control value. */
+                " bics  r1, r0          \n" /* Clear nPRIV bit. */
+                " msr   control, r1     \n" /* Write back new control value. */
                 ::: "r1", "memory"
                 );
 
@@ -669,21 +669,8 @@ void vSVCHandler_C( uint32_t * pulParam ) /* PRIVILEGED_FUNCTION */
         {
             pulTaskStack = pxMpuSettings->xSystemCallStackInfo.pulTaskStack;
 
-            if( ( ulLR & portEXC_RETURN_STACK_FRAME_TYPE_MASK ) == 0UL )
-            {
-                /* Extended frame i.e. FPU in use. */
-                ulStackFrameSize = 26;
-                __asm volatile (
-                    " vpush {s0}         \n" /* Trigger lazy stacking. */
-                    " vpop  {s0}         \n" /* Nullify the affect of the above instruction. */
-                    ::: "memory"
-                    );
-            }
-            else
-            {
-                /* Standard frame i.e. FPU not in use. */
-                ulStackFrameSize = 8;
-            }
+            /* Standard frame i.e. FPU not in use. */
+            ulStackFrameSize = 8;
 
             /* Make space on the task stack for the stack frame. */
             pulTaskStack = pulTaskStack - ulStackFrameSize;
@@ -699,9 +686,11 @@ void vSVCHandler_C( uint32_t * pulParam ) /* PRIVILEGED_FUNCTION */
 
             /* Drop the privilege before returning to the thread mode. */
             __asm volatile (
-                " mrs r1, control     \n" /* Obtain current control value. */
-                " orr r1, #1          \n" /* Set nPRIV bit. */
-                " msr control, r1     \n" /* Write back new control value. */
+                " .syntax unified       \n"
+                " movs   r0, #1         \n"
+                " mrs   r1, control     \n" /* Obtain current control value. */
+                " orrs  r1, r0          \n" /* Set nPRIV bit. */
+                " msr   control, r1     \n" /* Write back new control value. */
                 ::: "r1", "memory"
                 );
 
@@ -744,66 +733,74 @@ BaseType_t xPortIsTaskPrivileged( void ) /* PRIVILEGED_FUNCTION */
     return xTaskIsPrivileged;
 }
 /*-----------------------------------------------------------*/
-
+#if 0
 static void prvRestoreContextOfFirstTask( void )
 {
     __asm volatile
     (
-        " .syntax unified                     \n"
-        " ldr r0, =0xE000ED08                   \n" /* Use the NVIC offset register to locate the stack. */
-        " ldr r0, [r0]                          \n"
-        " ldr r0, [r0]                          \n"
-        " msr msp, r0                           \n" /* Set the msp back to the start of the stack. */
-        "                                       \n"
+        " .syntax unified                         \n"
+        " .thumb                                    \n"
+        " ldr   r1, =#0xE000                         \n"
+        " lsls  r1, r1, #0x16                       \n"
+        " ldr   r1, #0xED08                         \n" /* Use the NVIC offset register to locate the stack. */
+        " ldr   r0, [r0]                            \n"
+        " ldr   r0, [r0]                            \n"
+        " msr   msp, r0                             \n" /* Set the msp back to the start of the stack. */
+        "                                           \n"
         /*------------ Program MPU. ------------ */
-        " ldr r3, pxCurrentTCBConst2            \n" /* r3 = pxCurrentTCBConst2. */
-        " ldr r2, [r3]                          \n" /* r2 = pxCurrentTCB. */
-        " adds r2, r2, #4                        \n" /* r2 = Second item in the TCB which is xMPUSettings. */
-        "                                       \n"
-        " dmb                                   \n" /* Complete outstanding transfers before disabling MPU. */
-        " ldr r0, =0xe000ed94                   \n" /* MPU_CTRL register. */
-        " ldr r3, [r0]                          \n" /* Read the value of MPU_CTRL. */
-        " ldr r1, #1                            \n"   
-        " bics r3, r3, r1                       \n" /* r3 = r3 & ~1 i.e. Clear the bit 0 in r3. */
-        " str r3, [r0]                          \n" /* Disable MPU. */
-        "                                       \n"
-        " ldr r0, =0xe000ed9c                   \n" /* Region Base Address register. */
-        " ldmia r2!, {r4-r7}                    \n" /* Read 2 sets of MPU registers [MPU Region # 0 - 1]. */
-        " stmia r0!, {r4-r7}                    \n" /* Write 2 sets of MPU registers [MPU Region # 0 - 2]. */
-        " ldmia r2!, {r4-r7}                   \n" /* Read 2 sets of MPU registers [MPU Region # 2 - 3]. */
-        " stmia r0!,  {r4-r7}                   \n" /* Write 2 sets of MPU registers [MPU Region # 2 - 3]. */
-        "                                       \n"
-        " ldr r0, =0xe000ed94                   \n" /* MPU_CTRL register. */
-        " ldr r3, [r0]                          \n" /* Read the value of MPU_CTRL. */
-        " orrs r3, r3, r1                          \n" /* r3 = r3 | 1 i.e. Set the bit 0 in r3. */
-        " str r3, [r0]                          \n" /* Enable MPU. */
-        " dsb                                   \n" /* Force memory writes before continuing. */
-        "                                       \n"
+        " ldr   r3, pxCurrentTCB              \n" /* r3 = pxCurrentTCBConst2. */
+        " ldr   r2, [r3]                            \n" /* r2 = pxCurrentTCB. */
+        " adds  r2, r2, #4                          \n" /* r2 = Second item in the TCB which is xMPUSettings. */
+        "                                           \n"
+        " dmb                                       \n" /* Complete outstanding transfers before disabling MPU. */
+        //" ldr   r0, =0xe000ed94                     \n" /* MPU_CTRL register. */
+        " ldr   r0, =#0xE000                         \n"
+        " lsls  r0, r0, #0x16                       \n"
+        " ldr   r0, =#0xED94                         \n" /* MPU_CTRL register. */
+        " ldr   r3, [r0]                            \n" /* Read the value of MPU_CTRL. */
+        " ldr   r1, =#1                              \n"
+        " bics  r3, r3, r1                          \n" /* r3 = r3 & ~1 i.e. Clear the bit 0 in r3. */
+        " str   r3, [r0]                            \n" /* Disable MPU. */
+
+        "                                           \n"
+        //" ldr r0, =0xe000ed9c                     \n" /* Region Base Address register. */
+        " ldr   r0, =#0xE000                         \n"
+        " lsls  r0, r0, #0x16                       \n"
+        " ldr   r0, =#0xED9C                         \n" /* Region Base Address register. */
+        " ldmia r2!, {r4-r7}                        \n" /* Read 2 sets of MPU registers [MPU Region # 0 - 1]. */
+        " stmia r0!, {r4-r7}                        \n" /* Write 2 sets of MPU registers [MPU Region # 0 - 2]. */
+        " ldmia r2!, {r4-r7}                        \n" /* Read 2 sets of MPU registers [MPU Region # 2 - 3]. */
+        " stmia r0!,  {r4-r7}                       \n" /* Write 2 sets of MPU registers [MPU Region # 2 - 3]. */
+        "                                           \n"
+        //" ldr   r0, =0xe000ed94                     \n" /* MPU_CTRL register. */
+        " ldr   r0, =#0xE000                         \n"
+        " lsls  r0, r0, #0x16                       \n"
+        " ldr   r0, =#0xED94                         \n" /* MPU_CTRL register. */
+        " ldr   r3, [r0]                            \n" /* Read the value of MPU_CTRL. */
+        " orrs  r3, r3, r1                          \n" /* r3 = r3 | 1 i.e. Set the bit 0 in r3. */
+        " str   r3, [r0]                            \n" /* Enable MPU. */
+        " dsb                                       \n" /* Force memory writes before continuing. */
+        "                                           \n"
         /*---------- Restore Context. ---------- */
-        " ldr r3, pxCurrentTCBConst2            \n" /* r3 = pxCurrentTCBConst2. */
-        " ldr r2, [r3]                          \n" /* r2 = pxCurrentTCB. */
-        " ldr r1, [r2]                          \n" /* r1 = Location of saved context in TCB. */
-        "                                       \n"
-        " subs r1, r1, #0x4                     \n" /* Set r0 back to the location of hardware saved context. */
-        " ldmia r1!, {r0}                        \n" /* r0 contains PSP after the hardware had saved context. */
-        " ldmia r1!, {r4-r7}                    \n" /* r4-r11 contain hardware saved context. */
-        " ldmia r1!, {r7-r11}                   \n" /* r0 contains PSP after the hardware had saved context. r4-r11 contain hardware saved context. */
-        " msr psp, r0                           \n"
-        " stmia r0!, {r4-r7}                    \n" /* Copy the hardware saved context on the task stack. */
-        " stmia r0, {r8-r11}                    \n" /* Copy the hardware saved context on the task stack. */
-        " ldmdb r1!, {r3-r11, lr}               \n" /* r3 contains CONTROL register. r4-r11 and LR restored. */
-        " msr control, r3                       \n"
-        " str r1, [r2]                          \n" /* Save the location where the context should be saved next as the first member of TCB. */
-        "                                       \n"
-        " mov r0, #0                            \n"
-        " msr basepri, r0                       \n"
-        " bx lr                                 \n"
-        "                                       \n"
-        " .ltorg                                \n" /* Assemble current literal pool to avoid offset-out-of-bound errors with lto. */
-        " .align 4                              \n"
-        " pxCurrentTCBConst2: .word pxCurrentTCB\n"
+        "   ldr  r2, pxCurrentTCB             \n"     /* Obtain location of pxCurrentTCB. */
+        "   ldr  r3, [r2]                           \n"
+        "   ldr  r0, [r3]                           \n"     /* The first item in pxCurrentTCB is the task top of stack. */
+        "   adds r0, #32                            \n"     /* Discard everything up to r0. */
+        "   msr  psp, r0                            \n"     /* This is now the new top of stack to use in the task. */
+        "   movs r0, #2                             \n"     /* Switch to the psp stack. */
+        "   msr  CONTROL, r0                        \n"
+        "   isb                                     \n"
+        "   pop  {r0-r5}                            \n"     /* Pop the registers that are saved automatically. */
+        "   mov  lr, r5                             \n"     /* lr is now in r5. */
+        "   pop  {r3}                               \n"     /* Return address is now in r3. */
+        "   pop  {r2}                               \n"     /* Pop and discard XPSR. */
+        "   cpsie i                                 \n"     /* The first task has its context and interrupts can be enabled. */
+        "   bx   r3                                 \n"     /* Finally, jump to the user defined task code. */
+        "                                           \n"
+        " .extern pxCurrentTCB                      \n"
     );
 }
+#endif
 /*-----------------------------------------------------------*/
 
 /*
@@ -930,9 +927,6 @@ BaseType_t xPortStartScheduler( void )
     }
     #endif
 
-    /* Ensure the VFP is enabled - it should be anyway. */
-    vPortEnableVFP();
-
     /* Lazy save always. */
     *( portFPCCR ) |= portASPEN_AND_LSPEN_BITS;
 
@@ -940,21 +934,15 @@ BaseType_t xPortStartScheduler( void )
      * in use in case the FPU was used before the scheduler was started - which
      * would otherwise result in the unnecessary leaving of space in the SVC stack
      * for lazy saving of FPU registers. */
-    __asm volatile (
-        " ldr r0, =0xE000ED08   \n" /* Use the NVIC offset register to locate the stack. */
-        " ldr r0, [r0]          \n"
-        " ldr r0, [r0]          \n"
-        " msr msp, r0           \n" /* Set the msp back to the start of the stack. */
-        " mov r0, #0            \n" /* Clear the bit that indicates the FPU is in use, see comment above. */
-        " msr control, r0       \n"
-        " cpsie i               \n" /* Globally enable interrupts. */
-        " cpsie f               \n"
-        " dsb                   \n"
-        " isb                   \n"
-        " svc %0                \n" /* System call to start first task. */
-        " nop                   \n"
-        " .ltorg                \n"
-        ::"i" ( portSVC_START_SCHEDULER ) : "memory" );
+    vPortStartFirstTask();
+
+    /* Should never get here as the tasks will now be executing!  Call the task
+     * exit error function to prevent compiler warnings about a static function
+     * not being called in the case that the application writer overrides this
+     * functionality by defining configTASK_RETURN_ADDRESS.  Call
+     * vTaskSwitchContext() so link time optimisation does not remove the
+     * symbol. */
+    vTaskSwitchContext();
 
     /* Should not get here! */
     return 0;
@@ -988,13 +976,16 @@ void vPortExitCritical( void )
 }
 /*-----------------------------------------------------------*/
 
+#if 0
+
 void xPortPendSVHandler( void )
 {
     /* This is a naked function. */
 
     __asm volatile
     (
-        " ldr r3, pxCurrentTCBConst             \n" /* r3 = pxCurrentTCBConst. */
+        " .syntax unified                       \n"
+        " ldr r3, =pxCurrentTCB             \n" /* r3 = pxCurrentTCBConst. */
         " ldr r2, [r3]                          \n" /* r2 = pxCurrentTCB. */
         " ldr r1, [r2]                          \n" /* r1 = Location where the context should be saved. */
         "                                       \n"
@@ -1003,81 +994,77 @@ void xPortPendSVHandler( void )
         " mrs r0, psp                           \n"
         " isb                                   \n"
         "                                       \n"
-        " stmia r1!, {r3-r11, lr}               \n" /* Store CONTROL register, r4-r7 and LR. */
-        " stmia r1!, {r3-r11, lr}               \n" /* Store CONTROL register, r7-r11 and LR. */
-        " ldmia r0, {r4-r11}                    \n" /* Copy hardware saved context into r4-r11. */
-        " stmia r1!, {r0, r4-r11}               \n" /* Store original PSP (after hardware has saved context) and the hardware saved context. */
-        " str r1, [r2]                          \n" /* Save the location from where the context should be restored as the first member of TCB. */
+        " subs r0, r0, #32                    \n" /* Make space for the remaining low registers. */
+        " str r0, [r2]                        \n" /* Save the new top of stack. */
+        " stmia r0!, {r4-r7}                  \n" /* Store the low registers that are not saved automatically. */
+        " mov r4, r8                          \n" /* Store the high registers. */
+        " mov r5, r9                          \n"
+        " mov r6, r10                         \n"
+        " mov r7, r11                         \n"
+        " stmia r0!, {r4-r7}                  \n"
         "                                       \n"
         /*---------- Select next task. --------- */
-        " mov r0, %0                            \n"
-        #if ( configENABLE_ERRATA_837070_WORKAROUND == 1 )
-            " cpsid i                               \n" /* ARM Cortex-M7 r0p1 Errata 837070 workaround. */
-        #endif
-        " msr basepri, r0                       \n"
-        " dsb                                   \n"
-        " isb                                   \n"
-        #if ( configENABLE_ERRATA_837070_WORKAROUND == 1 )
-            " cpsie i                               \n" /* ARM Cortex-M7 r0p1 Errata 837070 workaround. */
-        #endif
-        " bl vTaskSwitchContext                 \n"
-        " mov r0, #0                            \n"
-        " msr basepri, r0                       \n"
+        " push {r3, r14}                      \n"
+        " cpsid i                             \n"
+        " bl vTaskSwitchContext               \n"
+        " cpsie i                             \n"
+        " pop {r2, r3}                        \n" /* lr goes in r3. r2 now holds tcb pointer. */
         "                                       \n"
         /*------------ Program MPU. ------------ */
-        " ldr r3, pxCurrentTCBConst             \n" /* r3 = pxCurrentTCBConst. */
-        " ldr r2, [r3]                          \n" /* r2 = pxCurrentTCB. */
-        " add r2, r2, #4                        \n" /* r2 = Second item in the TCB which is xMPUSettings. */
+        " adds r2, r2, #4                        \n" /* r2 = Second item in the TCB which is xMPUSettings. */
         "                                       \n"
         " dmb                                   \n" /* Complete outstanding transfers before disabling MPU. */
-        " ldr r0, =0xe000ed94                   \n" /* MPU_CTRL register. */
+        //" ldr r0, =0xe000ed94                   \n" /* MPU_CTRL register. */
+        " ldr   r0, =0xE000                         \n"
+        " lsls  r0, r0, #0x16                       \n"
+        " ldr   r0, =0xED94                         \n" /* MPU_CTRL register. */
         " ldr r3, [r0]                          \n" /* Read the value of MPU_CTRL. */
-        " bic r3, #1                            \n" /* r3 = r3 & ~1 i.e. Clear the bit 0 in r3. */
+        " ldr r1, =#1                            \n"
+        " bics r3, r3, r1                       \n" /* r3 = r3 & ~1 i.e. Clear the bit 0 in r3. */
         " str r3, [r0]                          \n" /* Disable MPU. */
         "                                       \n"
-        " ldr r0, =0xe000ed9c                   \n" /* Region Base Address register. */
-        " ldmia r2!, {r4-r11}                   \n" /* Read 4 sets of MPU registers [MPU Region # 0 - 3]. */
-        " stmia r0, {r4-r11}                    \n" /* Write 4 sets of MPU registers [MPU Region # 0 - 3]. */
+        //" ldr r0, =0xe000ed9c                   \n" /* Region Base Address register. */
+        " ldr   r0, =#0xE000                         \n"
+        " lsls  r0, r0, #0x16                       \n"
+        " ldr   r0, =#0xED9C                         \n" /* Region Base Address register. */
+        " ldmia r2!, {r4-r7}                    \n" /* Read 2 sets of MPU registers [MPU Region # 0 - 1]. */
+        " stmia r0!, {r4-r7}                    \n" /* Write 2 sets of MPU registers [MPU Region # 0 - 2]. */
+        " ldmia r2!, {r4-r7}                   \n" /* Read 2 sets of MPU registers [MPU Region # 2 - 3]. */
+        " stmia r0!,  {r4-r7}                   \n" /* Write 2 sets of MPU registers [MPU Region # 2 - 3]. */
         "                                       \n"
-        #if ( configTOTAL_MPU_REGIONS == 16 )
-            " ldmia r2!, {r4-r11}                   \n" /* Read 4 sets of MPU registers [MPU Region # 4 - 7]. */
-            " stmia r0, {r4-r11}                    \n" /* Write 4 sets of MPU registers. [MPU Region # 4 - 7]. */
-            " ldmia r2!, {r4-r11}                   \n" /* Read 4 sets of MPU registers [MPU Region # 8 - 11]. */
-            " stmia r0, {r4-r11}                    \n" /* Write 4 sets of MPU registers. [MPU Region # 8 - 11]. */
-        #endif /* configTOTAL_MPU_REGIONS == 16. */
-        "                                       \n"
-        " ldr r0, =0xe000ed94                   \n" /* MPU_CTRL register. */
+        //" ldr r0, =0xe000ed94                   \n" /* MPU_CTRL register. */
+        " ldr   r0, =#0xE000                         \n"
+        " lsls  r0, r0, #0x16                       \n"
+        " ldr   r0, =#0xED94                         \n" /* MPU_CTRL register. */
         " ldr r3, [r0]                          \n" /* Read the value of MPU_CTRL. */
-        " orr r3, #1                            \n" /* r3 = r3 | 1 i.e. Set the bit 0 in r3. */
+        " orrs r3, r3, r1                          \n" /* r3 = r3 | 1 i.e. Set the bit 0 in r3. */
         " str r3, [r0]                          \n" /* Enable MPU. */
         " dsb                                   \n" /* Force memory writes before continuing. */
         "                                       \n"
         /*---------- Restore Context. ---------- */
-        " ldr r3, pxCurrentTCBConst             \n" /* r3 = pxCurrentTCBConst. */
-        " ldr r2, [r3]                          \n" /* r2 = pxCurrentTCB. */
-        " ldr r1, [r2]                          \n" /* r1 = Location of saved context in TCB. */
-        "                                       \n"
-        " ldmdb r1!, {r0, r4-r11}               \n" /* r0 contains PSP after the hardware had saved context. r4-r11 contain hardware saved context. */
-        " msr psp, r0                           \n"
-        " stmia r0!, {r4-r11}                   \n" /* Copy the hardware saved context on the task stack. */
-        " ldmdb r1!, {r3-r11, lr}               \n" /* r3 contains CONTROL register. r4-r11 and LR restored. */
-        " msr control, r3                       \n"
-
-        " tst lr, #0x10                         \n"
-        " ittt eq                               \n"
-        " vldmdbeq r1!, {s0-s16}                \n" /* s0-s16 contain hardware saved FP context. */
-        " vstmiaeq r0!, {s0-s16}                \n" /* Copy hardware saved FP context on the task stack. */
-        " vldmdbeq r1!, {s16-s31}               \n" /* Restore s16-s31. */
-
-        " str r1, [r2]                          \n" /* Save the location where the context should be saved next as the first member of TCB. */
-        " bx lr                                 \n"
-        "                                       \n"
-        " .ltorg                                \n" /* Assemble the current literal pool to avoid offset-out-of-bound errors with lto. */
-        " .align 4                              \n"
-        " pxCurrentTCBConst: .word pxCurrentTCB \n"
+        " ldr  r2, pxCurrentTCBConst2 \n"     /* Obtain location of pxCurrentTCB. */
+        " ldr  r3, [r2]               \n"
+        " ldr  r0, [r3]               \n"     /* The first item in pxCurrentTCB is the task top of stack. */
+        " adds r0, #32                \n"     /* Discard everything up to r0. */
+        " msr  psp, r0                \n"     /* This is now the new top of stack to use in the task. */
+        " movs r0, #2                 \n"     /* Switch to the psp stack. */
+        " msr  CONTROL, r0            \n"
+        " isb                         \n"
+        " pop  {r0-r5}                \n"     /* Pop the registers that are saved automatically. */
+        " mov  lr, r5                 \n"     /* lr is now in r5. */
+        " pop  {r3}                   \n"     /* Return address is now in r3. */
+        " pop  {r2}                   \n"     /* Pop and discard XPSR. */
+        " cpsie i                     \n"     /* The first task has its context and interrupts can be enabled. */
+        " bx   r3                     \n"     /* Finally, jump to the user defined task code. */
+        "                               \n"
+        "   .align 4                    \n"
+        "pxCurrentTCBConst2: .word pxCurrentTCB"
         ::"i" ( configMAX_SYSCALL_INTERRUPT_PRIORITY )
     );
 }
+
+#endif
+
 /*-----------------------------------------------------------*/
 
 void xPortSysTickHandler( void )
@@ -1230,14 +1217,13 @@ BaseType_t xIsPrivileged( void ) /* __attribute__ (( naked )) */
 {
     __asm volatile
     (
-        "   mrs r0, control                         \n" /* r0 = CONTROL. */
-        "   tst r0, #1                              \n" /* Perform r0 & 1 (bitwise AND) and update the conditions flag. */
-        "   ite ne                                  \n"
-        "   movne r0, #0                            \n" /* CONTROL[0]!=0. Return false to indicate that the processor is not privileged. */
-        "   moveq r0, #1                            \n" /* CONTROL[0]==0. Return true to indicate that the processor is privileged. */
-        "   bx lr                                   \n" /* Return. */
+        " .syntax unified                           \n"
+        " mrs   r0, control                         \n" /* r0 = CONTROL. */
+        " movs  r1, #1                              \n"
+        " ands  r0, r1                              \n" /* Perform r0 & 1 (bitwise AND) and update the conditions flag. */
+        " bx lr                                     \n" /* Return. */
         "                                           \n"
-        "   .align 4                                \n"
+        " .align 4                                  \n"
         ::: "r0", "memory"
     );
 }
@@ -1247,10 +1233,12 @@ void vResetPrivilege( void ) /* __attribute__ (( naked )) */
 {
     __asm volatile
     (
-        "   mrs r0, control                         \n" /* r0 = CONTROL. */
-        "   orr r0, #1                              \n" /* r0 = r0 | 1. */
-        "   msr control, r0                         \n" /* CONTROL = r0. */
-        "   bx lr                                   \n" /* Return to the caller. */
+        " .syntax unified                           \n"
+        " movs  r1, #1                              \n"
+        " mrs   r0, control                         \n" /* r0 = CONTROL. */
+        " orrs  r0, r1                              \n" /* r0 = r0 | 1. */
+        " msr   control, r0                         \n" /* CONTROL = r0. */
+        " bx    lr                                  \n" /* Return to the caller. */
         ::: "r0", "memory"
     );
 }
