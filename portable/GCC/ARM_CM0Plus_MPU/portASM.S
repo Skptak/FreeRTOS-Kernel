@@ -59,7 +59,6 @@
 
     
     #define FREERTOS_ASSEMBLY
-        #include "portmacro_asm.h"
         #include "mpu_syscall_numbers.h"
     #undef FREERTOS_ASSEMBLY
 /* ----------------------------------------------------------------------------------- */
@@ -164,18 +163,18 @@ vPortSVCHandler:
        ldr r3, =#NUM_SYSTEM_CALLS
        cmp r2, r3
        blt syscall_enter
-       ldr  r3, =#portSVC_SYSTEM_CALL_EXIT
+       ldr  r3, =#104
        cmp r2, r3
        beq syscall_exit
-       b vSVCHandler_C
+       bl vSVCHandler_C
 
      syscall_enter:
          mov r1, lr
-         b vSystemCallEnter
+         bl vSystemCallEnter
 
      syscall_exit:
          mov r1, lr
-         b vSystemCallExit
+         bl vSystemCallExit
 
 .align 4
 .global xPortPendSVHandler

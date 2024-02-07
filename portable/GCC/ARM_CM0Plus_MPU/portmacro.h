@@ -36,7 +36,7 @@
 #endif
 /* *INDENT-ON* */
 
-#include "portmacro_asm.h"
+#include <stdint.h>
 
 /*-----------------------------------------------------------
  * Port specific definitions.
@@ -78,7 +78,7 @@ typedef unsigned long    UBaseType_t;
 /*
  * Starts the scheduler by restoring the context of the first task to run.
  */
-void prvRestoreContextOfFirstTask( void ) __attribute__( ( naked ) );
+void vPortStartFirstTask( void ) __attribute__( ( naked ) );
 
 /*-----------------------------------------------------------*/
 
@@ -99,7 +99,7 @@ void prvRestoreContextOfFirstTask( void ) __attribute__( ( naked ) );
 #define portPRIVILEGED_FLASH_REGION                              ( 6UL )
 #define portPRIVILEGED_RAM_REGION                                ( 7UL )
 #define portFIRST_CONFIGURABLE_REGION                            ( 0UL )
-#define portLAST_CONFIGURABLE_REGION                             ( 2UL )
+#define portLAST_CONFIGURABLE_REGION                             ( 4UL )
 #define portNUM_CONFIGURABLE_REGIONS                             ( ( portLAST_CONFIGURABLE_REGION - portFIRST_CONFIGURABLE_REGION ) + 1 )
 #define portTOTAL_NUM_REGIONS_IN_TCB                             ( portNUM_CONFIGURABLE_REGIONS + 1 )     /* Plus one to make space for the stack region. */
 
@@ -164,6 +164,12 @@ typedef struct MPU_SETTINGS
 /*-----------------------------------------------------------*/
 
 /* Scheduler utilities. */
+
+/* SVC numbers for various services. */
+#define portSVC_START_SCHEDULER        100
+#define portSVC_YIELD                  101
+#define portSVC_RAISE_PRIVILEGE        102
+#define portSVC_SYSTEM_CALL_EXIT       104
 
 #define portYIELD()    __asm volatile ( "   SVC %0  \n" ::"i" ( portSVC_YIELD ) : "memory" )
 #define portYIELD_WITHIN_API()                          \
@@ -264,8 +270,8 @@ extern void vPortExitCritical( void );
 /*-----------------------------------------------------------*/
 
 extern BaseType_t xIsPrivileged( void );
-extern void vResetPrivilege( void );
-extern void vPortSwitchToUserMode( void );
+void vResetPrivilege( void );
+void vPortSwitchToUserMode( void );
 
 /**
  * @brief Checks whether or not the processor is privileged.

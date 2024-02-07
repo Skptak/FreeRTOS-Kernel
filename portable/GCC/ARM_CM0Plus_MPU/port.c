@@ -182,11 +182,6 @@ void vPortSVCHandler( void ) __attribute__( ( naked ) ) PRIVILEGED_FUNCTION;
  */
 void vSVCHandler_C( uint32_t * pulRegisters ) __attribute__( ( noinline ) ) PRIVILEGED_FUNCTION;
 
-/*
- * Function to enable the VFP.
- */
-static void vPortEnableVFP( void ) __attribute__( ( naked ) );
-
 /**
  * @brief Checks whether or not the processor is privileged.
  *
@@ -1168,16 +1163,6 @@ static void prvSetupMPU( void )
                                        ( portMPU_REGION_EXECUTE_NEVER ) |
                                        ( ( configTEX_S_C_B_SRAM & portMPU_RASR_TEX_S_C_B_MASK ) << portMPU_RASR_TEX_S_C_B_LOCATION ) |
                                        prvGetMPURegionSizeSetting( ( uint32_t ) __privileged_data_end__ - ( uint32_t ) __privileged_data_start__ ) |
-                                       ( portMPU_REGION_ENABLE );
-
-        /* By default allow everything to access the general peripherals.  The
-         * system peripherals and registers are protected. */
-        portMPU_REGION_BASE_ADDRESS_REG = ( portPERIPHERALS_START_ADDRESS ) |
-                                          ( portMPU_REGION_VALID ) |
-                                          ( portGENERAL_PERIPHERALS_REGION );
-
-        portMPU_REGION_ATTRIBUTE_REG = ( portMPU_REGION_READ_WRITE | portMPU_REGION_EXECUTE_NEVER ) |
-                                       ( prvGetMPURegionSizeSetting( portPERIPHERALS_END_ADDRESS - portPERIPHERALS_START_ADDRESS ) ) |
                                        ( portMPU_REGION_ENABLE );
 
         /* Enable the memory fault exception. */

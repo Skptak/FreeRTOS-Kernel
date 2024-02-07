@@ -34,7 +34,6 @@
     .section freertos_system_calls
 #define FREERTOS_ASSEMBLY
     #include "FreeRTOSConfig.h"
-    #include "portmacro_asm.h"
     #include "mpu_syscall_numbers.h"
 #undef FREERTOS_ASSEMBLY
 
@@ -49,7 +48,7 @@
 .type vPortYield, %function
 vPortYield:
     /* Make the SVC to swap tasks */
-    SVC     #portSVC_YIELD
+    SVC     #100
     /* After yielding to another task, resume executing the calling task */
     BX  LR
 
@@ -60,7 +59,7 @@ vPortYield:
 .type vPortSystemCallExit, %function
 vPortSystemCallExit:
     /* Make the SVC to exit a system call */
-    SVC     #portSVC_SYSTEM_CALL_EXIT
+    SVC     #104
     /* After performing the requested FreeRTOS API, return to the calling task */
     BX      LR
 
@@ -508,7 +507,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
 
 /*---------------------------------------------------------------------------*/
 
-#if INCLUDE_xTaskDelayUntil == 1
+#if ( INCLUDE_xTaskDelayUntil == 1 ) | ( INCLUDE_vTaskDelayUntil == 1 )
     .extern MPU_xTaskDelayUntilImpl
     /**
      * Function: TaskHandle_t MPU_xTaskDelayUntil
@@ -527,7 +526,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
 
     /*-----------------------------------------------------------------------*/
 
-#endif /* if ( INCLUDE_xTaskDelayUntil == 1 ) */
+#endif /* ( INCLUDE_xTaskDelayUntil == 1 ) | ( INCLUDE_vTaskDelayUntil == 1 ) */
 
 #if INCLUDE_xTaskAbortDelay == 1
 
@@ -1124,7 +1123,7 @@ MPU_xStreamBufferNextMessageLengthBytes:
 
 #endif /* if ( configUSE_QUEUE_SETS == 1 ) */
 
-#if configQUEUE_REGISTRY_SIZE == 1
+#if configQUEUE_REGISTRY_SIZE != 0
 
     /*-----------------------------------------------------------------------*/
 
