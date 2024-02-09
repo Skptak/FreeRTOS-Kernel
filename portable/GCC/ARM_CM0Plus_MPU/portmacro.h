@@ -75,6 +75,9 @@ typedef unsigned long    UBaseType_t;
     #error configTICK_TYPE_WIDTH_IN_BITS set to unsupported tick type width.
 #endif
 
+typedef void ( * portISR_t )( void );
+
+
 /*
  * Starts the scheduler by restoring the context of the first task to run.
  */
@@ -171,6 +174,35 @@ typedef struct MPU_SETTINGS
 #define portSVC_RAISE_PRIVILEGE        102
 #define portSVC_SYSTEM_CALL_EXIT       104
 
+/* Constants used to check the installation of the FreeRTOS interrupt handlers. */
+/* Constants required to manipulate the NVIC. */
+#define portNVIC_SYSTICK_CTRL_REG             ( *( ( volatile uint32_t * ) 0xe000e010 ) )
+#define portNVIC_SYSTICK_LOAD_REG             ( *( ( volatile uint32_t * ) 0xe000e014 ) )
+#define portNVIC_SYSTICK_CURRENT_VALUE_REG    ( *( ( volatile uint32_t * ) 0xe000e018 ) )
+#define portNVIC_INT_CTRL_REG                 ( *( ( volatile uint32_t * ) 0xe000ed04 ) )
+#define portNVIC_SHPR3_REG                    ( *( ( volatile uint32_t * ) 0xe000ed20 ) )
+
+/* Constants required to access and manipulate the SysTick. */
+#define portNVIC_SYSTICK_INT                      ( 0x00000002UL )
+#define portNVIC_SYSTICK_ENABLE                   ( 0x00000001UL )
+#define portNVIC_SVC_PRI                          ( ( ( uint32_t ) configMAX_SYSCALL_INTERRUPT_PRIORITY - 1UL ) << 24UL )
+#define portNVIC_SYSTICK_PRI                  ( portMIN_INTERRUPT_PRIORITY << 24UL )
+
+#define portNVIC_PENDSVSET_BIT                ( 1UL << 28UL )
+#define portNVIC_PEND_SYSTICK_SET_BIT         ( 1UL << 26UL )
+#define portNVIC_PEND_SYSTICK_CLEAR_BIT       ( 1UL << 25UL )
+#define portMIN_INTERRUPT_PRIORITY            ( 255UL )
+#define portNVIC_PENDSV_PRI                   ( portMIN_INTERRUPT_PRIORITY << 16UL )
+#define portNVIC_SHPR2_REG                 ( *( ( volatile uint32_t * ) 0xE000ED1C ) )
+#define portNVIC_SYS_CTRL_STATE_REG               ( *( ( volatile uint32_t * ) 0xe000ed24 ) )
+
+/* Constants used to check the installation of the FreeRTOS interrupt handlers. */
+#define portSCB_VTOR_REG                      ( *( ( portISR_t ** ) 0xe000ed08 ) )
+#define portVECTOR_INDEX_PENDSV               ( 14 )
+
+/* The systick is a 24-bit counter. */
+#define portMAX_24_BIT_NUMBER                 ( 0xffffffUL )
+
 #define portYIELD()    __asm volatile ( "   SVC %0  \n" ::"i" ( portSVC_YIELD ) : "memory" )
 #define portYIELD_WITHIN_API()                          \
     {                                                   \
@@ -183,8 +215,6 @@ typedef struct MPU_SETTINGS
         __asm volatile ( "isb" );                                  \
     }
 
-#define portNVIC_INT_CTRL_REG     ( *( ( volatile uint32_t * ) 0xe000ed04 ) )
-#define portNVIC_PENDSVSET_BIT    ( 1UL << 28UL )
 #define portEND_SWITCHING_ISR( xSwitchRequired )            \
     do                                                      \
     {                                                       \

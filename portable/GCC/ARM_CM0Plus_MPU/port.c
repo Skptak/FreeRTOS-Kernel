@@ -58,31 +58,21 @@
     #define portNVIC_SYSTICK_CLK    ( 0 )
 #endif
 
-#ifndef configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS
-    #warning "configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS is not defined. We recommend defining it to 0 in FreeRTOSConfig.h for better security."
-    #define configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS    1
+#if ( configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS == 1)
+    #error "configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS is not allowed"
 #endif
 
-/* Constants required to access and manipulate the NVIC. */
-#define portNVIC_SYSTICK_CTRL_REG                 ( *( ( volatile uint32_t * ) 0xe000e010 ) )
-#define portNVIC_SYSTICK_LOAD_REG                 ( *( ( volatile uint32_t * ) 0xe000e014 ) )
-#define portNVIC_SYSTICK_CURRENT_VALUE_REG        ( *( ( volatile uint32_t * ) 0xe000e018 ) )
-#define portNVIC_SHPR3_REG                        ( *( ( volatile uint32_t * ) 0xe000ed20 ) )
-#define portNVIC_SHPR2_REG                        ( *( ( volatile uint32_t * ) 0xe000ed1c ) )
-#define portNVIC_SYS_CTRL_STATE_REG               ( *( ( volatile uint32_t * ) 0xe000ed24 ) )
-#define portNVIC_MEM_FAULT_ENABLE                 ( 1UL << 16UL )
+
 
 /* Constants used to detect Cortex-M7 r0p0 and r0p1 cores, and ensure
  * that a work around is active for errata 837070. */
-#define portCPUID                                 ( *( ( volatile uint32_t * ) 0xE000ed00 ) )
-#define portCORTEX_M7_r0p1_ID                     ( 0x410FC271UL )
-#define portCORTEX_M7_r0p0_ID                     ( 0x410FC270UL )
+#define portCPUID                                 ( *( ( volatile uint32_t * ) 0xE000ED00 ) )
 
 /* Constants required to access and manipulate the MPU. */
-#define portMPU_TYPE_REG                          ( *( ( volatile uint32_t * ) 0xe000ed90 ) )
-#define portMPU_REGION_BASE_ADDRESS_REG           ( *( ( volatile uint32_t * ) 0xe000ed9C ) )
-#define portMPU_REGION_ATTRIBUTE_REG              ( *( ( volatile uint32_t * ) 0xe000edA0 ) )
-#define portMPU_CTRL_REG                          ( *( ( volatile uint32_t * ) 0xe000ed94 ) )
+#define portMPU_TYPE_REG                          ( *( ( volatile uint32_t * ) 0xE000ED90 ) )
+#define portMPU_REGION_BASE_ADDRESS_REG           ( *( ( volatile uint32_t * ) 0xE000ED9C ) )
+#define portMPU_REGION_ATTRIBUTE_REG              ( *( ( volatile uint32_t * ) 0xE000EDA0 ) )
+#define portMPU_CTRL_REG                          ( *( ( volatile uint32_t * ) 0xE000ED94 ) )
 #define portEXPECTED_MPU_TYPE_VALUE               ( configTOTAL_MPU_REGIONS << 8UL )
 #define portMPU_ENABLE                            ( 0x01UL )
 #define portMPU_BACKGROUND_ENABLE                 ( 1UL << 2UL )
@@ -91,18 +81,6 @@
 #define portMPU_REGION_ENABLE                     ( 0x01UL )
 #define portPERIPHERALS_START_ADDRESS             0x40000000UL
 #define portPERIPHERALS_END_ADDRESS               0x5FFFFFFFUL
-
-/* Constants required to access and manipulate the SysTick. */
-#define portNVIC_SYSTICK_INT                      ( 0x00000002UL )
-#define portNVIC_SYSTICK_ENABLE                   ( 0x00000001UL )
-#define portMIN_INTERRUPT_PRIORITY                ( 255UL )
-#define portNVIC_PENDSV_PRI                       ( ( ( uint32_t ) portMIN_INTERRUPT_PRIORITY ) << 16UL )
-#define portNVIC_SYSTICK_PRI                      ( ( ( uint32_t ) portMIN_INTERRUPT_PRIORITY ) << 24UL )
-#define portNVIC_SVC_PRI                          ( ( ( uint32_t ) configMAX_SYSCALL_INTERRUPT_PRIORITY - 1UL ) << 24UL )
-
-/* Constants required to manipulate the VFP. */
-#define portFPCCR                                 ( ( volatile uint32_t * ) 0xe000ef34UL ) /* Floating point context control register. */
-#define portASPEN_AND_LSPEN_BITS                  ( 0x3UL << 30UL )
 
 /* Constants required to set up the initial stack. */
 #define portINITIAL_XPSR                          ( 0x01000000UL )
@@ -207,20 +185,12 @@ void vPortSwitchToUserMode( void );
 /**
  * @brief Enter critical section.
  */
-#if ( configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS == 1 )
-    void vPortEnterCritical( void ) FREERTOS_SYSTEM_CALL;
-#else
-    void vPortEnterCritical( void ) PRIVILEGED_FUNCTION;
-#endif
+void vPortEnterCritical( void ) PRIVILEGED_FUNCTION;
 
 /**
  * @brief Exit from critical section.
  */
-#if ( configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS == 1 )
-    void vPortExitCritical( void ) FREERTOS_SYSTEM_CALL;
-#else
-    void vPortExitCritical( void ) PRIVILEGED_FUNCTION;
-#endif
+void vPortExitCritical( void ) PRIVILEGED_FUNCTION;
 
 #if ( configUSE_MPU_WRAPPERS_V1 == 0 )
 
@@ -803,111 +773,44 @@ static void prvRestoreContextOfFirstTask( void )
  */
 BaseType_t xPortStartScheduler( void )
 {
-    /* Errata 837070 workaround must only be enabled on Cortex-M7 r0p0
-     * and r0p1 cores. */
-    #if ( configENABLE_ERRATA_837070_WORKAROUND == 1 )
-        configASSERT( ( portCPUID == portCORTEX_M7_r0p1_ID ) || ( portCPUID == portCORTEX_M7_r0p0_ID ) );
-    #else
-
-        /* When using this port on a Cortex-M7 r0p0 or r0p1 core, define
-         * configENABLE_ERRATA_837070_WORKAROUND to 1 in your
-         * FreeRTOSConfig.h. */
-        configASSERT( portCPUID != portCORTEX_M7_r0p1_ID );
-        configASSERT( portCPUID != portCORTEX_M7_r0p0_ID );
-    #endif
-
-    #if ( configASSERT_DEFINED == 1 )
+    /* An application can install FreeRTOS interrupt handlers in one of the
+     * folllowing ways:
+     * 1. Direct Routing - Install the function xPortPendSVHandler for PendSV
+     *    interrupt.
+     * 2. Indirect Routing - Install separate handler for PendSV interrupt and
+     *    route program control from that handler to xPortPendSVHandler function.
+     *
+     * Applications that use Indirect Routing must set
+     * configCHECK_HANDLER_INSTALLATION to 0 in their FreeRTOSConfig.h. Direct
+     * routing, which is validated here when configCHECK_HANDLER_INSTALLATION
+     * is 1, should be preferred when possible. */
+    #if ( configCHECK_HANDLER_INSTALLATION == 1 )
     {
-        volatile uint8_t ucOriginalPriority;
-        volatile uint32_t ulImplementedPrioBits = 0;
-        volatile uint8_t * const pucFirstUserPriorityRegister = ( volatile uint8_t * const ) ( portNVIC_IP_REGISTERS_OFFSET_16 + portFIRST_USER_INTERRUPT_NUMBER );
-        volatile uint8_t ucMaxPriorityValue;
+        /* Point pxVectorTable to the interrupt vector table. Systems without
+         * a VTOR register provide the value zero in the VTOR register and
+         * the vector table itself is located at the address 0x00000000. */
+        const portISR_t * const pxVectorTable = portSCB_VTOR_REG;
 
-        /* Determine the maximum priority from which ISR safe FreeRTOS API
-         * functions can be called.  ISR safe functions are those that end in
-         * "FromISR".  FreeRTOS maintains separate thread and ISR API functions to
-         * ensure interrupt entry is as fast and simple as possible.
+        /* Validate that the application has correctly installed the FreeRTOS
+         * handler for PendSV interrupt. We do not check the installation of the
+         * SysTick handler because the application may choose to drive the RTOS
+         * tick using a timer other than the SysTick timer by overriding the
+         * weak function vPortSetupTimerInterrupt().
          *
-         * Save the interrupt priority value that is about to be clobbered. */
-        ucOriginalPriority = *pucFirstUserPriorityRegister;
-
-        /* Determine the number of priority bits available.  First write to all
-         * possible bits. */
-        *pucFirstUserPriorityRegister = portMAX_8_BIT_VALUE;
-
-        /* Read the value back to see how many bits stuck. */
-        ucMaxPriorityValue = *pucFirstUserPriorityRegister;
-
-        /* Use the same mask on the maximum system call priority. */
-        ucMaxSysCallPriority = configMAX_SYSCALL_INTERRUPT_PRIORITY & ucMaxPriorityValue;
-
-        /* Check that the maximum system call priority is nonzero after
-         * accounting for the number of priority bits supported by the
-         * hardware. A priority of 0 is invalid because setting the BASEPRI
-         * register to 0 unmasks all interrupts, and interrupts with priority 0
-         * cannot be masked using BASEPRI.
-         * See https://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html */
-        configASSERT( ucMaxSysCallPriority );
-
-        /* Check that the bits not implemented in hardware are zero in
-         * configMAX_SYSCALL_INTERRUPT_PRIORITY. */
-        configASSERT( ( configMAX_SYSCALL_INTERRUPT_PRIORITY & ( ~ucMaxPriorityValue ) ) == 0U );
-
-        /* Calculate the maximum acceptable priority group value for the number
-         * of bits read back. */
-
-        while( ( ucMaxPriorityValue & portTOP_BIT_OF_BYTE ) == portTOP_BIT_OF_BYTE )
-        {
-            ulImplementedPrioBits++;
-            ucMaxPriorityValue <<= ( uint8_t ) 0x01;
-        }
-
-        if( ulImplementedPrioBits == 8 )
-        {
-            /* When the hardware implements 8 priority bits, there is no way for
-             * the software to configure PRIGROUP to not have sub-priorities. As
-             * a result, the least significant bit is always used for sub-priority
-             * and there are 128 preemption priorities and 2 sub-priorities.
-             *
-             * This may cause some confusion in some cases - for example, if
-             * configMAX_SYSCALL_INTERRUPT_PRIORITY is set to 5, both 5 and 4
-             * priority interrupts will be masked in Critical Sections as those
-             * are at the same preemption priority. This may appear confusing as
-             * 4 is higher (numerically lower) priority than
-             * configMAX_SYSCALL_INTERRUPT_PRIORITY and therefore, should not
-             * have been masked. Instead, if we set configMAX_SYSCALL_INTERRUPT_PRIORITY
-             * to 4, this confusion does not happen and the behaviour remains the same.
-             *
-             * The following assert ensures that the sub-priority bit in the
-             * configMAX_SYSCALL_INTERRUPT_PRIORITY is clear to avoid the above mentioned
-             * confusion. */
-            configASSERT( ( configMAX_SYSCALL_INTERRUPT_PRIORITY & 0x1U ) == 0U );
-            ulMaxPRIGROUPValue = 0;
-        }
-        else
-        {
-            ulMaxPRIGROUPValue = portMAX_PRIGROUP_BITS - ulImplementedPrioBits;
-        }
-
-        /* Shift the priority group value back to its position within the AIRCR
-         * register. */
-        ulMaxPRIGROUPValue <<= portPRIGROUP_SHIFT;
-        ulMaxPRIGROUPValue &= portPRIORITY_GROUP_MASK;
-
-        /* Restore the clobbered interrupt priority register to its original
-         * value. */
-        *pucFirstUserPriorityRegister = ucOriginalPriority;
+         * Assertion failures here indicate incorrect installation of the
+         * FreeRTOS handler. For help installing the FreeRTOS handler, see
+         * https://www.FreeRTOS.org/FAQHelp.html.
+         *
+         * Systems with a configurable address for the interrupt vector table
+         * can also encounter assertion failures or even system faults here if
+         * VTOR is not set correctly to point to the application's vector table. */
+        configASSERT( pxVectorTable[ portVECTOR_INDEX_PENDSV ] == xPortPendSVHandler );
     }
-    #endif /* configASSERT_DEFINED */
+    #endif /* configCHECK_HANDLER_INSTALLATION */
 
-    /* Make PendSV and SysTick the same priority as the kernel, and the SVC
-     * handler higher priority so it can be used to exit a critical section (where
-     * lower priorities are masked). */
+    /* Make PendSV and SysTick the lowest priority interrupts. */
     portNVIC_SHPR3_REG |= portNVIC_PENDSV_PRI;
     portNVIC_SHPR3_REG |= portNVIC_SYSTICK_PRI;
-
-    /* Configure the regions in the MPU that are common to all tasks. */
-    prvSetupMPU();
 
     /* Start the timer that generates the tick ISR.  Interrupts are disabled
      * here already. */
@@ -915,20 +818,11 @@ BaseType_t xPortStartScheduler( void )
 
     /* Initialise the critical nesting count ready for the first task. */
     uxCriticalNesting = 0;
+    
+    /* Setup default MPU regions */
+    prvSetupMPU();
 
-    #if ( ( configUSE_MPU_WRAPPERS_V1 == 0 ) && ( configENABLE_ACCESS_CONTROL_LIST == 1 ) )
-    {
-        xSchedulerRunning = pdTRUE;
-    }
-    #endif
-
-    /* Lazy save always. */
-    *( portFPCCR ) |= portASPEN_AND_LSPEN_BITS;
-
-    /* Start the first task.  This also clears the bit that indicates the FPU is
-     * in use in case the FPU was used before the scheduler was started - which
-     * would otherwise result in the unnecessary leaving of space in the SVC stack
-     * for lazy saving of FPU registers. */
+    /* Start the first task. */
     vPortStartFirstTask();
 
     /* Should never get here as the tasks will now be executing!  Call the task
@@ -942,6 +836,7 @@ BaseType_t xPortStartScheduler( void )
     /* Should not get here! */
     return 0;
 }
+
 /*-----------------------------------------------------------*/
 
 void vPortEndScheduler( void )
@@ -1166,7 +1061,7 @@ static void prvSetupMPU( void )
                                        ( portMPU_REGION_ENABLE );
 
         /* Enable the memory fault exception. */
-        portNVIC_SYS_CTRL_STATE_REG |= portNVIC_MEM_FAULT_ENABLE;
+        // portNVIC_SYS_CTRL_STATE_REG |= portNVIC_MEM_FAULT_ENABLE;
 
         /* Enable the MPU with the background region configured. */
         portMPU_CTRL_REG |= ( portMPU_ENABLE | portMPU_BACKGROUND_ENABLE );

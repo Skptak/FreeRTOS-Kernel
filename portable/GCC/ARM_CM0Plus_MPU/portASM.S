@@ -163,10 +163,15 @@ vPortSVCHandler:
        ldr r3, =#NUM_SYSTEM_CALLS
        cmp r2, r3
        blt syscall_enter
+
+       /* System Call Exit SVC */
        ldr  r3, =#104
        cmp r2, r3
        beq syscall_exit
+
+       /* If not the above go to vSVCHandler_C */
        bl vSVCHandler_C
+
 
      syscall_enter:
          mov r1, lr
