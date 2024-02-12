@@ -102,7 +102,7 @@ void vPortStartFirstTask( void ) __attribute__( ( naked ) );
 #define portPRIVILEGED_FLASH_REGION                              ( 6UL )
 #define portPRIVILEGED_RAM_REGION                                ( 7UL )
 #define portFIRST_CONFIGURABLE_REGION                            ( 0UL )
-#define portLAST_CONFIGURABLE_REGION                             ( 4UL )
+#define portLAST_CONFIGURABLE_REGION                             ( 3UL )
 #define portNUM_CONFIGURABLE_REGIONS                             ( ( portLAST_CONFIGURABLE_REGION - portFIRST_CONFIGURABLE_REGION ) + 1 )
 #define portTOTAL_NUM_REGIONS_IN_TCB                             ( portNUM_CONFIGURABLE_REGIONS + 1 )     /* Plus one to make space for the stack region. */
 
@@ -127,10 +127,10 @@ typedef struct MPU_REGION_SETTINGS
 
     typedef struct SYSTEM_CALL_STACK_INFO
     {
-        uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ];
         uint32_t * pulSystemCallStack;
         uint32_t * pulTaskStack;
         uint32_t ulLinkRegisterAtSystemCallEntry;
+        uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ];
     } xSYSTEM_CALL_STACK_INFO;
 
 #endif /* #if ( configUSE_MPU_WRAPPERS_V1 == 0 ) */
