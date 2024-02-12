@@ -64,6 +64,11 @@
 
 
 
+#ifndef configTOTAL_MPU_REGIONS
+	#define configTOTAL_MPU_REGIONS 8U
+#elif ( configTOTAL_MPU_REGIONS != 8U )
+	#error "The Cortex-M0+ Only supports 8 MPU regions"
+#endif /* configTOTAL_MPU_REGIONS */
 /* Constants used to detect Cortex-M7 r0p0 and r0p1 cores, and ensure
  * that a work around is active for errata 837070. */
 #define portCPUID                                 ( *( ( volatile uint32_t * ) 0xE000ED00 ) )
@@ -275,32 +280,35 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
                                      BaseType_t xRunPrivileged,
                                      xMPU_SETTINGS * xMPUSettings )
 {
+
+    xMPUSettings->ulContext[ 0 ] = 0x08080808;                                        /* r8. */
+	xMPUSettings->ulContext[ 1 ] = 0x09090909;                                        /* r9. */
+	xMPUSettings->ulContext[ 2 ] = 0x10101010;                                        /* r10. */
+	xMPUSettings->ulContext[ 3 ] = 0x11111111;                                        /* r11. */
+    xMPUSettings->ulContext[ 4 ] = 0x04040404;                                        /* r4. */
+    xMPUSettings->ulContext[ 5 ] = 0x05050505;                                        /* r5. */
+    xMPUSettings->ulContext[ 6 ] = 0x06060606;                                        /* r6. */
+    xMPUSettings->ulContext[ 7 ] = 0x07070707;                                        /* r7. */
+
     if( xRunPrivileged == pdTRUE )
     {
         xMPUSettings->ulTaskFlags |= portTASK_IS_PRIVILEGED_FLAG;
-        xMPUSettings->ulContext[ 0 ] = portINITIAL_CONTROL_IF_PRIVILEGED;
+        xMPUSettings->ulContext[ 8 ] = portINITIAL_CONTROL_IF_PRIVILEGED;
     }
     else
     {
         xMPUSettings->ulTaskFlags &= ( ~( portTASK_IS_PRIVILEGED_FLAG ) );
-        xMPUSettings->ulContext[ 0 ] = portINITIAL_CONTROL_IF_UNPRIVILEGED;
+        xMPUSettings->ulContext[ 8 ] = portINITIAL_CONTROL_IF_UNPRIVILEGED;
     }
 
-    xMPUSettings->ulContext[ 1 ] = 0x04040404;                                        /* r4. */
-    xMPUSettings->ulContext[ 2 ] = 0x05050505;                                        /* r5. */
-    xMPUSettings->ulContext[ 3 ] = 0x06060606;                                        /* r6. */
-    xMPUSettings->ulContext[ 4 ] = 0x07070707;                                        /* r7. */
-    xMPUSettings->ulContext[ 5 ] = 0x08080808;                                        /* r8. */
-    xMPUSettings->ulContext[ 6 ] = 0x09090909;                                        /* r9. */
-    xMPUSettings->ulContext[ 7 ] = 0x10101010;                                        /* r10. */
-    xMPUSettings->ulContext[ 8 ] = 0x11111111;                                        /* r11. */
     xMPUSettings->ulContext[ 9 ] = portINITIAL_EXC_RETURN;                            /* EXC_RETURN. */
-
     xMPUSettings->ulContext[ 10 ] = ( uint32_t ) ( pxTopOfStack - 8 );                /* PSP with the hardware saved stack. */
+
     xMPUSettings->ulContext[ 11 ] = ( uint32_t ) pvParameters;                        /* r0. */
     xMPUSettings->ulContext[ 12 ] = 0x01010101;                                       /* r1. */
     xMPUSettings->ulContext[ 13 ] = 0x02020202;                                       /* r2. */
     xMPUSettings->ulContext[ 14 ] = 0x03030303;                                       /* r3. */
+
     xMPUSettings->ulContext[ 15 ] = 0x12121212;                                       /* r12. */
     xMPUSettings->ulContext[ 16 ] = 0;                                                /* LR. */
     xMPUSettings->ulContext[ 17 ] = ( ( uint32_t ) pxCode ) & portSTART_ADDRESS_MASK; /* PC. */
@@ -1018,9 +1026,6 @@ static void prvSetupMPU( void )
         extern uint32_t __privileged_data_end__[];
     #endif /* if defined( __ARMCC_VERSION ) */
 
-    /* The only permitted number of regions are 8 or 16. */
-    configASSERT( ( configTOTAL_MPU_REGIONS == 8 ) || ( configTOTAL_MPU_REGIONS == 16 ) );
-
     /* Ensure that the configTOTAL_MPU_REGIONS is configured correctly. */
     configASSERT( portMPU_TYPE_REG == portEXPECTED_MPU_TYPE_VALUE );
 
@@ -1278,7 +1283,15 @@ BaseType_t xPortIsAuthorizedToAccessBuffer( const void * pvBuffer,
     BaseType_t xAccessGranted = pdFALSE;
     const xMPU_SETTINGS * xTaskMpuSettings = xTaskGetMPUSettings( NULL ); /* Calling task's MPU settings. */
 
-    if( ( xTaskMpuSettings->ulTaskFlags & portTASK_IS_PRIVILEGED_FLAG ) == portTASK_IS_PRIVILEGED_FLAG )
+    if( xSchedulerRunning == pdFALSE )
+    {
+        /* Grant access to all the kernel objects before the scheduler
+         * is started. It is necessary because there is no task running
+         * yet and therefore, we cannot use the permissions of any
+         * task. */
+        xAccessGranted = pdTRUE;
+    }
+    else if( ( xTaskMpuSettings->ulTaskFlags & portTASK_IS_PRIVILEGED_FLAG ) == portTASK_IS_PRIVILEGED_FLAG )
     {
         xAccessGranted = pdTRUE;
     }

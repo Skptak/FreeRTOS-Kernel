@@ -57,7 +57,7 @@
     .extern vSystemCallEnter
     .extern vSystemCallExit
 
-    
+
     #define FREERTOS_ASSEMBLY
         #include "mpu_syscall_numbers.h"
     #undef FREERTOS_ASSEMBLY
@@ -67,63 +67,133 @@
 .global vPortStartFirstTask
 .type vPortStartFirstTask, %function
 vPortStartFirstTask:
-    //ldr   r0, =0xE000ED08                      /* MPU_CTRL register. */
-    ldr   r1, =#0xE000
-    lsls  r1, r1, #0x16
-    ldr   r1, =#0xED08                          /* Use the NVIC offset register to locate the stack. */
-    ldr   r0, [r0]
-    ldr   r0, [r0]
-    msr   msp, r0                              /* Set the msp back to the start of the stack. */
+    /* MPU_CTRL register. */
+    //ldr   r0, =0xE000ED08
+    /* Use the NVIC offset register to locate the stack. */
+    //ldr   r0, [r0]
+    //ldr   r0, [r0]
+    /* Set the msp back to the start of the stack. */
+    //msr   msp, r0
 
     /* ------------ Program MPU. ------------ */
-    ldr   r3, =pxCurrentTCB               /* r3 = pxCurrentTCBConst2. */
-    ldr   r2, [r3]                             /* r2 = pxCurrentTCB. */
-    adds  r2, r2, #4                           /* r2 = Second item in the TCB which is xMPUSettings. */
+    /* r3 = &pxCurrentTCB. */
+    ldr       r3, =pxCurrentTCB
+    /* r2 = pxCurrentTCB. */
+    ldr       r2, [r3]
+    /* r2 = Second item in the TCB which is xMPUSettings. */
+    adds      r2, r2, #4
+    /* Load the address of pulSystemCallStack */
+    MOV        R3, R2
+    ADDS    R3, R3, #0xB8
+    LDR        R3, [R3]
+    MOV        R11, R3
+    /* Complete outstanding transfers before disabling MPU. */
+    dmb
+    /* MPU_CTRL register. */
+    ldr   r0, =0xe000ed94
+    /* Read the value of MPU_CTRL. */
+    ldr   r3, [r0]
+    movs   r1, #0x1
+    /* r3 = r3 & ~1 i.e. Clear the bit 0 in r3. */
+    bics  r3, r3, r1
+    /* Disable MPU. */
+    str   r3, [r0]
 
-    dmb                                        /* Complete outstanding transfers before disabling MPU. */
-    ldr   r0, =0xe000ed94                      /* MPU_CTRL register. */
-    //ldr   r0, =#0xE000
-    //lsls  r0, r0, #0x16
-    //ldr   r0, =#0xED94                          /* MPU_CTRL register. */
-    ldr   r3, [r0]                             /* Read the value of MPU_CTRL. */
-    ldr   r1, =#1
-    bics  r3, r3, r1                           /* r3 = r3 & ~1 i.e. Clear the bit 0 in r3. */
-    str   r3, [r0]                             /* Disable MPU. */
 
+    /* Region Base Address register. */
+    ldr   r0, =0xE000ED9C
+    /* Read 2 sets of MPU registers [MPU Region # 0 - 1]. */
+    ldmia r2!, {r4-r7}
+    /* Write 2 sets of MPU registers [MPU Region # 0 - 2]. */
+    stmia r0!, {r4-r7}
+    /* Read 2 sets of MPU registers [MPU Region # 2 - 3]. */
+    ldmia r2!, {r4-r7}
+    /* Write 2 sets of MPU registers [MPU Region # 2 - 3]. */
+    stmia r0!,  {r4-r7}
 
-    // ldr r0, =0xe000ed9c                      /* Region Base Address register. */
-    ldr   r0, =0xE000
-    lsls  r0, r0, #0x16
-    ldr   r0, =0xED9C                          /* Region Base Address register. */
-    ldmia r2!, {r4-r7}                         /* Read 2 sets of MPU registers [MPU Region # 0 - 1]. */
-    stmia r0!, {r4-r7}                         /* Write 2 sets of MPU registers [MPU Region # 0 - 2]. */
-    ldmia r2!, {r4-r7}                         /* Read 2 sets of MPU registers [MPU Region # 2 - 3]. */
-    stmia r0!,  {r4-r7}                        /* Write 2 sets of MPU registers [MPU Region # 2 - 3]. */
-
-    //ldr   r0, =0xe000ed94                      /* MPU_CTRL register. */
-    ldr   r0, =0xE000
-    lsls  r0, r0, #0x16
-    ldr   r0, =0xED94                          /* MPU_CTRL register. */
-    ldr   r3, [r0]                             /* Read the value of MPU_CTRL. */
-    orrs  r3, r3, r1                           /* r3 = r3 | 1 i.e. Set the bit 0 in r3. */
-    str   r3, [r0]                             /* Enable MPU. */
-    dsb                                        /* Force memory writes before continuing. */
+    /* MPU_CTRL register. */
+    ldr   r0, =0xe000ed94
+    /* Read the value of MPU_CTRL. */
+    ldr   r3, [r0]
+    /* r3 = r3 | 1 i.e. Set the bit 0 in r3. */
+    orrs  r3, r3, r1
+    /* Enable MPU. */
+    str   r3, [r0]
+    /* Force memory writes before continuing. */
+    dsb
 
     /*---------- Restore Context. ---------- */
-    ldr  r2, =pxCurrentTCB                 /* Obtain location of pxCurrentTCB. */
+    /* Obtain location of pxCurrentTCB. */
+    ldr  r2, =pxCurrentTCB
     ldr  r3, [r2]
-    ldr  r0, [r3]                                /* The first item in pxCurrentTCB is the task top of stack. */
-    adds r0, #32                                 /* Discard everything up to r0. */
-    msr  psp, r0                                 /* This is now the new top of stack to use in the task. */
-    movs r0, #2                                  /* Switch to the psp stack. */
-    msr  CONTROL, r0
-    isb
-    pop  {r0-r5}                                 /* Pop the registers that are saved automatically. */
-    mov  lr, r5                                  /* lr is now in r5. */
-    pop  {r3}                                    /* Return address is now in r3. */
-    pop  {r2}                                    /* Pop and discard XPSR. */
-    cpsie i                                      /* The first task has its context and interrupts can be enabled. */
-    bx   r3                                      /* Finally, jump to the user defined task code. */
+    /* The first item in pxCurrentTCB is the location of the task context. */
+    LDR      r0, [r3]
+    /* Move up ulContext to where the hardware saved context is */
+    SUBS    R0, #0x24
+
+    /* Load the Task Stack Pointer into R1 */
+    LDMIA    R0!, {R1}
+    /* Increment the Task Stack Pointer past the buffering */
+    ADDS    R1, #0x24
+    /* Set R14 to be the task stack pointer */
+    MOV        R14, R1
+    /* Set the Program Stack Pointer to be the Task Stack Pointer */
+    MSR        PSP, R1
+
+    /* Set the SP to this location so we can pop 8 Registers at a time */
+    MOV        SP, R0
+    /* Set R12 to be the start of R4-R11 */
+    SUBS    R0, #0x2C
+    /* Save this location in R12 to load later */
+    MOV        R12, R0
+
+    /* Pop R0-R3, R12, LR, PC, and xPSR */
+    POP        { R0-R7 }
+    /* Set MSP to be the Task Stack, with room for the context */
+    MSR        MSP, R14
+    /* Push the hardware saved context to the task stack */
+    PUSH    { R0-R7 }
+    /* Set R14 to be the incremented value */
+    MRS        R14, MSP
+
+    /* Set MSP to be pointed to R4-R11 in ulContext */
+    MSR        MSP, R12
+    /* Pop R8-R11 into R0-R3, and then R4-R7 into R4-R7 */
+    POP        { R0-R7 }
+
+    /* Move R8-R10 into their correct registers */
+    MOV        R8, R0
+    MOV        R9, R1
+    MOV        R10, R2
+    /* Hold off on setting R11 so we can load the correct MSP */
+
+    /* Load the initial control value from ulContext */
+    POP        { R0 }
+
+    /* Set the Main Stack Pointer to be pulSystemCallStack */
+    MSR        MSP, R11
+    /* Now set R11 to be the correct value */
+    MOV        R11, R3
+
+    /* Set the Thread Stack Pointer to be the Task Stack */
+    MSR        PSP, R14
+
+    /* Set initial task Control Value */
+    MSR        CONTROL, R0
+
+    /* Set R0 to be the bottom 3 hardware pushed values */
+    MOV        R0, SP
+    ADDS    R0, #0x10
+
+    /* Pop off R12-R15 */
+    LDMIA    R0!, {R1-R3}
+    /* Restore the task's R12, and PC, no default LR is set */
+    MOV        R12, R1
+    MOV        LR, R3
+    SUBS    R0, #0x1C
+    /* Restore the task's R0-R3 */
+    LDM        R0, {R0-R3}
+    BX        LR
     .align 4
 /*-----------------------------------------------------------*/
 
