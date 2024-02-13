@@ -57,23 +57,23 @@
     .extern vSystemCallEnter
     .extern vSystemCallExit
 
+    /* These must be in sync with portmacro.h. */
+    #define portSVC_START_SCHEDULER        100
+    #define portSVC_SYSTEM_CALL_EXIT       103
+
 
     #define FREERTOS_ASSEMBLY
         #include "mpu_syscall_numbers.h"
     #undef FREERTOS_ASSEMBLY
 /* ----------------------------------------------------------------------------------- */
 
+//.macro portRESTORE_CONTEXT
 .align 4
-.global vPortStartFirstTask
-.type vPortStartFirstTask, %function
-vPortStartFirstTask:
-    /* MPU_CTRL register. */
-    //ldr   r0, =0xE000ED08
-    /* Use the NVIC offset register to locate the stack. */
-    //ldr   r0, [r0]
-    //ldr   r0, [r0]
-    /* Set the msp back to the start of the stack. */
-    //msr   msp, r0
+.type portRESTORE_CONTEXT, %function
+portRESTORE_CONTEXT:
+    /* Don't reset the MSP stack as is done on CM3/4 devices. The vector table
+     * in some CM0 devices cannot be modified and thus may not hold the
+     * application's initial MSP value. */
 
     /* ------------ Program MPU. ------------ */
     /* r3 = &pxCurrentTCB. */
@@ -102,14 +102,29 @@ vPortStartFirstTask:
 
     /* Region Base Address register. */
     ldr   r0, =0xE000ED9C
-    /* Read 2 sets of MPU registers [MPU Region # 0 - 1]. */
-    ldmia r2!, {r4-r7}
-    /* Write 2 sets of MPU registers [MPU Region # 0 - 2]. */
-    stmia r0!, {r4-r7}
-    /* Read 2 sets of MPU registers [MPU Region # 2 - 3]. */
-    ldmia r2!, {r4-r7}
-    /* Write 2 sets of MPU registers [MPU Region # 2 - 3]. */
-    stmia r0!,  {r4-r7}
+
+    /* Read 1 set of MPU registers [MPU Region # 0].*/
+    ldmia r2!, {r4-r5}
+    /* Write 1 set of MPU registers [MPU Region # 0 ]. */
+    STR     R4, [R0]
+    STR     R5, [R0, #0x4]
+
+    /* Read 1 set of MPU registers [MPU Region # 1].*/
+    ldmia r2!, {r4-r5}
+    /* Write 1 set of MPU registers [MPU Region # 1 ]. */
+    STR     R4, [R0]
+    STR     R5, [R0, #0x4]
+    /* Read 1 set of MPU registers [MPU Region # 2].*/
+    ldmia r2!, {r4-r5}
+    /* Write 1 set of MPU registers [MPU Region # 2 ]. */
+    STR     R4, [R0]
+    STR     R5, [R0, #0x4]
+
+    /* Read 1 set of MPU registers [MPU Region # 3].*/
+    ldmia r2!, {r4-r5}
+    /* Write 1 set of MPU registers [MPU Region # 3 ]. */
+    STR     R4, [R0]
+    STR     R5, [R0, #0x4]
 
     /* MPU_CTRL register. */
     ldr   r0, =0xe000ed94
@@ -127,7 +142,7 @@ vPortStartFirstTask:
     ldr  r2, =pxCurrentTCB
     ldr  r3, [r2]
     /* The first item in pxCurrentTCB is the location of the task context. */
-    LDR      r0, [r3]
+    LDR     r0, [r3]
     /* Move up ulContext to where the hardware saved context is */
     SUBS    R0, #0x24
 
@@ -136,65 +151,89 @@ vPortStartFirstTask:
     /* Increment the Task Stack Pointer past the buffering */
     ADDS    R1, #0x24
     /* Set R14 to be the task stack pointer */
-    MOV        R14, R1
+    MOV     R14, R1
     /* Set the Program Stack Pointer to be the Task Stack Pointer */
-    MSR        PSP, R1
+    MSR     PSP, R1
 
     /* Set the SP to this location so we can pop 8 Registers at a time */
-    MOV        SP, R0
+    MOV     SP, R0
     /* Set R12 to be the start of R4-R11 */
     SUBS    R0, #0x2C
     /* Save this location in R12 to load later */
-    MOV        R12, R0
+    MOV     R12, R0
 
     /* Pop R0-R3, R12, LR, PC, and xPSR */
-    POP        { R0-R7 }
+    POP     { R0-R7 }
     /* Set MSP to be the Task Stack, with room for the context */
-    MSR        MSP, R14
+    MSR     MSP, R14
     /* Push the hardware saved context to the task stack */
     PUSH    { R0-R7 }
     /* Set R14 to be the incremented value */
-    MRS        R14, MSP
+    MRS     R14, MSP
 
     /* Set MSP to be pointed to R4-R11 in ulContext */
-    MSR        MSP, R12
+    MSR     MSP, R12
     /* Pop R8-R11 into R0-R3, and then R4-R7 into R4-R7 */
-    POP        { R0-R7 }
+    POP     { R0-R7 }
 
     /* Move R8-R10 into their correct registers */
-    MOV        R8, R0
-    MOV        R9, R1
-    MOV        R10, R2
+    MOV     R8, R0
+    MOV     R9, R1
+    MOV     R10, R2
     /* Hold off on setting R11 so we can load the correct MSP */
 
     /* Load the initial control value from ulContext */
-    POP        { R0 }
+    POP     { R1 }
 
     /* Set the Main Stack Pointer to be pulSystemCallStack */
-    MSR        MSP, R11
+    MSR     MSP, R11
+
     /* Now set R11 to be the correct value */
-    MOV        R11, R3
-
-    /* Set the Thread Stack Pointer to be the Task Stack */
-    MSR        PSP, R14
-
-    /* Set initial task Control Value */
-    MSR        CONTROL, R0
+    MOV     R11, R3
 
     /* Set R0 to be the bottom 3 hardware pushed values */
-    MOV        R0, SP
+    MOV     R0, R14
     ADDS    R0, #0x10
 
+    /* Set the Thread Stack Pointer to be the Task Stack */
+    MSR     PSP, R0
+
+    /* Set initial task Control Value */
+    MSR     CONTROL, R1
+
     /* Pop off R12-R15 */
-    LDMIA    R0!, {R1-R3}
+    LDMIA   R0!, {R1-R3}
     /* Restore the task's R12, and PC, no default LR is set */
-    MOV        R12, R1
-    MOV        LR, R3
+    MOV     R12, R1
+    MOV     LR, R3
     SUBS    R0, #0x1C
     /* Restore the task's R0-R3 */
-    LDM        R0, {R0-R3}
-    BX        LR
-    .align 4
+    LDM     R0, {R0-R3}
+    dsb
+    isb
+    BX      LR
+
+//.endm
+
+.align 4
+.global vPortStartFirstTask
+.type vPortStartFirstTask, %function
+vPortStartFirstTask:
+    /* Don't reset the MSP stack as is done on CM3/4 devices. The vector table
+     * in some CM0 devices cannot be modified and thus may not hold the
+     * application's initial MSP value. */
+
+    /* Perform a Data and Instruction Cache flush before making the SVC to
+     * restore the context of the first task. */
+    ldr     r0, =0xE000ED1C
+    ldr     r1, [r0]
+    movs     r2, #15
+    lsls    r2, #24
+    orrs    r2, r2, r1
+    str     r2, [r0]
+    dsb
+    isb
+    svc #portSVC_START_SCHEDULER
 /*-----------------------------------------------------------*/
 
 /* Handler for Supervisor Calls (SVCs) when using this FreeRTOS Port */
@@ -217,39 +256,47 @@ vPortStartFirstTask:
 .global vPortSVCHandler
 .type vPortSVCHandler, %function
 vPortSVCHandler:
-     ldr r0, =#4
-     mov r1, lr
-     tst r1, r0
-     beq load_msp
-     mrs r0, psp
-     b svc_num_load
-     load_msp:
+    ldr r0, =#4
+    mov r1, lr
+    tst r1, r0
+    beq load_msp
+    mrs r0, psp
+    b svc_num_load
+    load_msp:
         mrs r0, msp
 
      svc_num_load:
-       ldr r1, [r0, #24]
-       subs r1, r1, #2
-       ldr r2, [r1]
-       ldr r3, =#NUM_SYSTEM_CALLS
-       cmp r2, r3
-       blt syscall_enter
+        ldr r1, [r0, #24]
+        subs r1, r1, #2
+        ldr r2, [r1]
+        ldr r3, =#NUM_SYSTEM_CALLS
+        cmp r2, r3
+        blt syscall_enter
 
-       /* System Call Exit SVC */
-       ldr  r3, =#104
-       cmp r2, r3
-       beq syscall_exit
+        /* System Call Exit SVC */
+        ldr  r3, =#portSVC_SYSTEM_CALL_EXIT
+        cmp r2, r3
+        beq syscall_exit
 
-       /* If not the above go to vSVCHandler_C */
-       bl vSVCHandler_C
+        /* Start the first task */
+        ldr     R3, =#portSVC_START_SCHEDULER
+        cmp     R2, R3
+        beq     start_first_task
+
+        /* If not the above go to vSVCHandler_C */
+        bl vSVCHandler_C
 
 
-     syscall_enter:
-         mov r1, lr
-         bl vSystemCallEnter
+    syscall_enter:
+        mov r1, lr
+        bl vSystemCallEnter
 
-     syscall_exit:
-         mov r1, lr
-         bl vSystemCallExit
+    syscall_exit:
+        mov r1, lr
+        bl vSystemCallExit
+
+    start_first_task:
+        b portRESTORE_CONTEXT
 
 .align 4
 .global xPortPendSVHandler
