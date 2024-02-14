@@ -82,6 +82,11 @@ typedef void ( * portISR_t )( void );
  * Starts the scheduler by restoring the context of the first task to run.
  */
 void vPortStartFirstTask( void ) __attribute__( ( naked ) );
+void SVC_Handler( void ) __attribute__( ( naked ) );
+void PendSV_Handler( void ) __attribute__( ( naked ) );
+
+/* CMSIS backwards-compatibility mapping */
+#define SysTick_Handler xPortSysTickHandler
 
 /*-----------------------------------------------------------*/
 
@@ -234,6 +239,7 @@ typedef struct MPU_SETTINGS
 /* Critical section management. */
 extern void vPortEnterCritical( void );
 extern void vPortExitCritical( void );
+
 #define portSET_INTERRUPT_MASK_FROM_ISR()         ulPortRaiseBASEPRI()
 #define portCLEAR_INTERRUPT_MASK_FROM_ISR( x )    vPortSetBASEPRI( x )
 #define portDISABLE_INTERRUPTS()                  vPortRaiseBASEPRI()

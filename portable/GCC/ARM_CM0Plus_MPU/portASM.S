@@ -83,21 +83,23 @@ portRESTORE_CONTEXT:
     /* r2 = Second item in the TCB which is xMPUSettings. */
     adds      r2, r2, #4
     /* Load the address of pulSystemCallStack */
-    MOV        R3, R2
+    MOV     R3, R2
     ADDS    R3, R3, #0xB8
-    LDR        R3, [R3]
-    MOV        R11, R3
+    LDR     R3, [R3]
+    /* Set the Main Stack Pointer to be pulSystemCallStack */
+    MSR     MSP, R3
+
     /* Complete outstanding transfers before disabling MPU. */
     dmb
     /* MPU_CTRL register. */
-    ldr   r0, =0xe000ed94
+    ldr     r0, =0xe000ed94
     /* Read the value of MPU_CTRL. */
-    ldr   r3, [r0]
-    movs   r1, #0x1
+    ldr     r3, [r0]
+    movs    r1, #0x1
     /* r3 = r3 & ~1 i.e. Clear the bit 0 in r3. */
-    bics  r3, r3, r1
+    bics    r3, r3, r1
     /* Disable MPU. */
-    str   r3, [r0]
+    str     r3, [r0]
 
 
     /* Region Base Address register. */
@@ -136,8 +138,63 @@ portRESTORE_CONTEXT:
     str   r3, [r0]
     /* Force memory writes before continuing. */
     dsb
-
     /*---------- Restore Context. ---------- */
+contextRestorePart:
+    ldr r3, =pxCurrentTCB
+    ldr r2, [r3]                           /* r2 = pxCurrentTCB. */
+    /* The first item in pxCurrentTCB is the location of the task context. */
+    LDR     R0, [R2]
+   	/* Move to the hardware saved context */
+    SUBS    R0, #0x48
+    /* Load R8-R11 from ulContext */
+    LDM     R0!, { R2-R5 }
+
+    /* Move high registers up */
+    MOV		R8, R2
+    MOV		R9, R3
+    MOV		R10, R4
+    MOV		R11, R5
+
+    /* Load EXEC return, the PSP from the stack, and R4-R7 */
+    LDM    R0!, { R2-R7}
+    /* Set the Program Stack Pointer (PSP) */
+    MSR     PSP, R3
+    /* Move the PSP into R1 to push to */
+    MOV     R1, R3
+
+    /* Pop the first 5 hardware-pushed registers from ulContext */
+    LDM   	R0!, {R3-R7}
+    /* Store the first 5 hardware-pushed registers onto the task stack */
+    STMIA   R1!, {R3-R7}
+
+    /* Pop the next 3 hardware-pushed registers */
+    LDMIA   R0!, {R3-R5}
+    /* Store the last two hardware-pushed registers onto the task stack */
+    STMIA   R1!, {R3-R5}
+
+    BX  R2
+	/* Branch to the EXC_Return instruction */
+
+#if 0
+
+	/* Move R0 past the 4 popped high registers */
+	SUBS	R0, #0x18
+    /* Pop the remaining high registers */
+    LDMIA   R0!, {R4-R5}
+    MOV     R9, R4
+    MOV     R8, R5
+
+	/* Move R0 to the last remaining low registers */
+	SUBS	R0, #0x20
+    /* Pop the reamining low registers */
+    LDMIA   R0!, {R4-R7}
+    
+    /* Branch to the EXC_Return instruction */
+    BX      R12
+/* Don't need this */
+#endif
+
+    #if 0
     /* Obtain location of pxCurrentTCB. */
     ldr  r2, =pxCurrentTCB
     ldr  r3, [r2]
@@ -212,7 +269,7 @@ portRESTORE_CONTEXT:
     dsb
     isb
     BX      LR
-
+#endif
 //.endm
 
 .align 4
@@ -225,12 +282,16 @@ vPortStartFirstTask:
 
     /* Perform a Data and Instruction Cache flush before making the SVC to
      * restore the context of the first task. */
+    #if 0
     ldr     r0, =0xE000ED1C
     ldr     r1, [r0]
     movs     r2, #15
     lsls    r2, #24
     orrs    r2, r2, r1
     str     r2, [r0]
+    #endif
+    cpsie i
+    cpsie f
     dsb
     isb
     svc #portSVC_START_SCHEDULER
@@ -253,9 +314,9 @@ vPortStartFirstTask:
  *       this function.
  */
 .align 4
-.global vPortSVCHandler
-.type vPortSVCHandler, %function
-vPortSVCHandler:
+.global SVC_Handler
+.type SVC_Handler, %function
+SVC_Handler:
     ldr r0, =#4
     mov r1, lr
     tst r1, r0
@@ -269,6 +330,9 @@ vPortSVCHandler:
         ldr r1, [r0, #24]
         subs r1, r1, #2
         ldr r2, [r1]
+        /* Highest possible SVC on the M0+ is SVC #0xFF */
+        MOVS	R1, #0XFF
+        ANDS	R2, R2, R1
         ldr r3, =#NUM_SYSTEM_CALLS
         cmp r2, r3
         blt syscall_enter
@@ -299,9 +363,9 @@ vPortSVCHandler:
         b portRESTORE_CONTEXT
 
 .align 4
-.global xPortPendSVHandler
-.type xPortPendSVHandler, %function
-xPortPendSVHandler:
+.global PendSV_Handler
+.type PendSV_Handler, %function
+PendSV_Handler:
      ldr r3, =pxCurrentTCB             /* r3 = pxCurrentTCBConst. */
      ldr r2, [r3]                           /* r2 = pxCurrentTCB. */
      ldr r1, [r2]                           /* r1 = Location where the context should be saved. */
