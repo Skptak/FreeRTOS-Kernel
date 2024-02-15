@@ -61,16 +61,18 @@
     #define portSVC_START_SCHEDULER        100
     #define portSVC_SYSTEM_CALL_EXIT       103
 
+    #define portINITIAL_EXC_RETURN      0xfffffffdUL
 
     #define FREERTOS_ASSEMBLY
         #include "mpu_syscall_numbers.h"
     #undef FREERTOS_ASSEMBLY
 /* ----------------------------------------------------------------------------------- */
-
-//.macro portRESTORE_CONTEXT
+/*
 .align 4
 .type portRESTORE_CONTEXT, %function
 portRESTORE_CONTEXT:
+*/
+.macro portRESTORE_CONTEXT
     /* Don't reset the MSP stack as is done on CM3/4 devices. The vector table
      * in some CM0 devices cannot be modified and thus may not hold the
      * application's initial MSP value. */
@@ -138,22 +140,24 @@ portRESTORE_CONTEXT:
     str   r3, [r0]
     /* Force memory writes before continuing. */
     dsb
+
     /*---------- Restore Context. ---------- */
-contextRestorePart:
-    ldr r3, =pxCurrentTCB
-    ldr r2, [r3]                           /* r2 = pxCurrentTCB. */
+    /* R3 = = &pxCurrentTCB */
+    LDR     R3, =pxCurrentTCB
+    /* r2 = pxCurrentTCB. */
+    LDR     R2, [r3]
     /* The first item in pxCurrentTCB is the location of the task context. */
     LDR     R0, [R2]
-   	/* Move to the hardware saved context */
+       /* Move to the hardware saved context */
     SUBS    R0, #0x48
     /* Load R8-R11 from ulContext */
     LDM     R0!, { R2-R5 }
 
     /* Move high registers up */
-    MOV		R8, R2
-    MOV		R9, R3
-    MOV		R10, R4
-    MOV		R11, R5
+    MOV     R8, R2
+    MOV     R9, R3
+    MOV     R10, R4
+    MOV     R11, R5
 
     /* Load EXEC return, the PSP from the stack, and R4-R7 */
     LDM    R0!, { R2-R7}
@@ -163,7 +167,7 @@ contextRestorePart:
     MOV     R1, R3
 
     /* Pop the first 5 hardware-pushed registers from ulContext */
-    LDM   	R0!, {R3-R7}
+    LDM     R0!, {R3-R7}
     /* Store the first 5 hardware-pushed registers onto the task stack */
     STMIA   R1!, {R3-R7}
 
@@ -172,105 +176,10 @@ contextRestorePart:
     /* Store the last two hardware-pushed registers onto the task stack */
     STMIA   R1!, {R3-R5}
 
-    BX  R2
-	/* Branch to the EXC_Return instruction */
-
-#if 0
-
-	/* Move R0 past the 4 popped high registers */
-	SUBS	R0, #0x18
-    /* Pop the remaining high registers */
-    LDMIA   R0!, {R4-R5}
-    MOV     R9, R4
-    MOV     R8, R5
-
-	/* Move R0 to the last remaining low registers */
-	SUBS	R0, #0x20
-    /* Pop the reamining low registers */
-    LDMIA   R0!, {R4-R7}
-    
     /* Branch to the EXC_Return instruction */
-    BX      R12
-/* Don't need this */
-#endif
+    BX      R2
 
-    #if 0
-    /* Obtain location of pxCurrentTCB. */
-    ldr  r2, =pxCurrentTCB
-    ldr  r3, [r2]
-    /* The first item in pxCurrentTCB is the location of the task context. */
-    LDR     r0, [r3]
-    /* Move up ulContext to where the hardware saved context is */
-    SUBS    R0, #0x24
-
-    /* Load the Task Stack Pointer into R1 */
-    LDMIA    R0!, {R1}
-    /* Increment the Task Stack Pointer past the buffering */
-    ADDS    R1, #0x24
-    /* Set R14 to be the task stack pointer */
-    MOV     R14, R1
-    /* Set the Program Stack Pointer to be the Task Stack Pointer */
-    MSR     PSP, R1
-
-    /* Set the SP to this location so we can pop 8 Registers at a time */
-    MOV     SP, R0
-    /* Set R12 to be the start of R4-R11 */
-    SUBS    R0, #0x2C
-    /* Save this location in R12 to load later */
-    MOV     R12, R0
-
-    /* Pop R0-R3, R12, LR, PC, and xPSR */
-    POP     { R0-R7 }
-    /* Set MSP to be the Task Stack, with room for the context */
-    MSR     MSP, R14
-    /* Push the hardware saved context to the task stack */
-    PUSH    { R0-R7 }
-    /* Set R14 to be the incremented value */
-    MRS     R14, MSP
-
-    /* Set MSP to be pointed to R4-R11 in ulContext */
-    MSR     MSP, R12
-    /* Pop R8-R11 into R0-R3, and then R4-R7 into R4-R7 */
-    POP     { R0-R7 }
-
-    /* Move R8-R10 into their correct registers */
-    MOV     R8, R0
-    MOV     R9, R1
-    MOV     R10, R2
-    /* Hold off on setting R11 so we can load the correct MSP */
-
-    /* Load the initial control value from ulContext */
-    POP     { R1 }
-
-    /* Set the Main Stack Pointer to be pulSystemCallStack */
-    MSR     MSP, R11
-
-    /* Now set R11 to be the correct value */
-    MOV     R11, R3
-
-    /* Set R0 to be the bottom 3 hardware pushed values */
-    MOV     R0, R14
-    ADDS    R0, #0x10
-
-    /* Set the Thread Stack Pointer to be the Task Stack */
-    MSR     PSP, R0
-
-    /* Set initial task Control Value */
-    MSR     CONTROL, R1
-
-    /* Pop off R12-R15 */
-    LDMIA   R0!, {R1-R3}
-    /* Restore the task's R12, and PC, no default LR is set */
-    MOV     R12, R1
-    MOV     LR, R3
-    SUBS    R0, #0x1C
-    /* Restore the task's R0-R3 */
-    LDM     R0, {R0-R3}
-    dsb
-    isb
-    BX      LR
-#endif
-//.endm
+.endm
 
 .align 4
 .global vPortStartFirstTask
@@ -282,14 +191,6 @@ vPortStartFirstTask:
 
     /* Perform a Data and Instruction Cache flush before making the SVC to
      * restore the context of the first task. */
-    #if 0
-    ldr     r0, =0xE000ED1C
-    ldr     r1, [r0]
-    movs     r2, #15
-    lsls    r2, #24
-    orrs    r2, r2, r1
-    str     r2, [r0]
-    #endif
     cpsie i
     cpsie f
     dsb
@@ -331,8 +232,8 @@ SVC_Handler:
         subs r1, r1, #2
         ldr r2, [r1]
         /* Highest possible SVC on the M0+ is SVC #0xFF */
-        MOVS	R1, #0XFF
-        ANDS	R2, R2, R1
+        MOVS    R1, #0XFF
+        ANDS    R2, R2, R1
         ldr r3, =#NUM_SYSTEM_CALLS
         cmp r2, r3
         blt syscall_enter
@@ -360,84 +261,56 @@ SVC_Handler:
         bl vSystemCallExit
 
     start_first_task:
-        b portRESTORE_CONTEXT
+        portRESTORE_CONTEXT
 
 .align 4
 .global PendSV_Handler
 .type PendSV_Handler, %function
 PendSV_Handler:
-     ldr r3, =pxCurrentTCB             /* r3 = pxCurrentTCBConst. */
-     ldr r2, [r3]                           /* r2 = pxCurrentTCB. */
-     ldr r1, [r2]                           /* r1 = Location where the context should be saved. */
-
     /*------------ Save Context. ----------- */
-     mrs r3, control
-     mrs r0, psp
-     isb
+    /* R3 = = &pxCurrentTCB */
+    LDR     R3, =pxCurrentTCB
+    /* r2 = pxCurrentTCB. */
+    LDR     R2, [r3]
+    /* The first item in pxCurrentTCB is the location of the task context. */
+    LDR     R0, [R2]
+    /* Make room for the hardware saved context */
+    SUBS    R0, #0x20
+    /* Push the low registers R4-R7 */
+    STMIA   R0!, {R4-R7}
 
-     subs r0, r0, #32                     /* Make space for the remaining low registers. */
-     str r0, [r2]                         /* Save the new top of stack. */
-     stmia r0!, {r4-r7}                   /* Store the low registers that are not saved automatically. */
-     mov r4, r8                           /* Store the high registers. */
-     mov r5, r9
-     mov r6, r10
-     mov r7, r11
-     stmia r0!, {r4-r7}
+    /* Move the Task Stack Pointer into R1 */
+    MRS     R1, PSP
+    /* TODO: Set R2 to EXC_Return */
+    LDR     R2, =#portINITIAL_EXC_RETURN
+    
+    /* Move high registers into open low registers */
+    MOV     R3, R8
+    MOV     R4, R9
+    MOV     R5, R10
+    MOV     R6, R11
+
+    /* Store the remaining high registers */
+    STMIA   R0!, { R1-R6 }
+
+    /* Load the first six hardware saved registers from the task stack */
+    LDMIA   R1!, { R2-R7 }
+
+    /* Store the first six hardware saved registers to ulContext */
+    STMIA   R0!, { R2-R7 }
+
+    /* Load the last two hardware saved registers from the task stack */
+    LDMIA   R1!, { R2-R3 }
+
+    /* Store the last two hardware saved registers to ulContext */
+    STMIA   R0!, { R2-R3 }
 
     /*---------- Select next task. --------- */
-     push {r3, r14}
-     cpsid i
-     bl vTaskSwitchContext
-     cpsie i
-     pop {r2, r3}                         /* lr goes in r3. r2 now holds tcb pointer. */
+    push   {r3, r14}
+    cpsid  i
+    bl     vTaskSwitchContext
+    cpsie  i
 
-    /*------------ Program MPU. ------------ */
-     adds r2, r2, #4                         /* r2 = Second item in the TCB which is xMPUSettings. */
-
-     dmb                                    /* Complete outstanding transfers before disabling MPU. */
-    // ldr r0, =0xe000ed94                    /* MPU_CTRL register. */
-     ldr   r0, =0xE000
-     lsls  r0, r0, #0x16
-     ldr   r0, =0xED94                          /* MPU_CTRL register. */
-     ldr r3, [r0]                           /* Read the value of MPU_CTRL. */
-     ldr r1, =#1
-     bics r3, r3, r1                        /* r3 = r3 & ~1 i.e. Clear the bit 0 in r3. */
-     str r3, [r0]                           /* Disable MPU. */
-
-    // ldr r0, =0xe000ed9c                    /* Region Base Address register. */
-     ldr   r0, =#0xE000
-     lsls  r0, r0, #0x16
-     ldr   r0, =#0xED9C                          /* Region Base Address register. */
-     ldmia r2!, {r4-r7}                     /* Read 2 sets of MPU registers [MPU Region # 0 - 1]. */
-     stmia r0!, {r4-r7}                     /* Write 2 sets of MPU registers [MPU Region # 0 - 2]. */
-     ldmia r2!, {r4-r7}                    /* Read 2 sets of MPU registers [MPU Region # 2 - 3]. */
-     stmia r0!,  {r4-r7}                    /* Write 2 sets of MPU registers [MPU Region # 2 - 3]. */
-
-    // ldr r0, =0xe000ed94                    /* MPU_CTRL register. */
-     ldr   r0, =#0xE000ED94
-     lsls  r0, r0, #0x16
-     ldr   r0, =#0xED94                          /* MPU_CTRL register. */
-     ldr r3, [r0]                           /* Read the value of MPU_CTRL. */
-     orrs r3, r3, r1                           /* r3 = r3 | 1 i.e. Set the bit 0 in r3. */
-     str r3, [r0]                           /* Enable MPU. */
-     dsb                                    /* Force memory writes before continuing. */
-
-    /*---------- Restore Context. ---------- */
-     ldr  r2, =pxCurrentTCB      /* Obtain location of pxCurrentTCB. */
-     ldr  r3, [r2]
-     ldr  r0, [r3]                    /* The first item in pxCurrentTCB is the task top of stack. */
-     adds r0, #32                     /* Discard everything up to r0. */
-     msr  psp, r0                     /* This is now the new top of stack to use in the task. */
-     movs r0, #2                      /* Switch to the psp stack. */
-     msr  CONTROL, r0
-     isb
-     pop  {r0-r5}                     /* Pop the registers that are saved automatically. */
-     mov  lr, r5                      /* lr is now in r5. */
-     pop  {r3}                        /* Return address is now in r3. */
-     pop  {r2}                        /* Pop and discard XPSR. */
-     cpsie i                          /* The first task has its context and interrupts can be enabled. */
-     bx   r3                          /* Finally, jump to the user defined task code. */
-
-    .align 4
+    portRESTORE_CONTEXT
 
 .end

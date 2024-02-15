@@ -267,7 +267,17 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
                                      BaseType_t xRunPrivileged,
                                      xMPU_SETTINGS * xMPUSettings )
 {
-
+    if( xRunPrivileged == pdTRUE )
+    {
+        xMPUSettings->ulTaskFlags |= portTASK_IS_PRIVILEGED_FLAG;
+        xMPUSettings->ulContext[ 0 ] = portINITIAL_CONTROL_IF_PRIVILEGED;
+    }
+    else
+    {
+        xMPUSettings->ulTaskFlags &= ( ~( portTASK_IS_PRIVILEGED_FLAG ) );
+        xMPUSettings->ulContext[ 0 ] = portINITIAL_CONTROL_IF_UNPRIVILEGED;
+    }
+    
     xMPUSettings->ulContext[ 1 ] = 0x08080808;      /* r8. */
 	xMPUSettings->ulContext[ 2 ] = 0x09090909;      /* r9. */
     xMPUSettings->ulContext[ 3 ] = 0x10101010;      /* r10. */
@@ -280,7 +290,7 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
     xMPUSettings->ulContext[ 9 ] = 0x06060606;      /* r6. */
     xMPUSettings->ulContext[ 10 ] = 0x07070707;      /* r7. */
 
-    /* Auto-Pushed Registers*/
+    /* Auto-Pushed Registers */
     xMPUSettings->ulContext[ 11 ] = ( uint32_t ) pvParameters;                        /* r0. */
     xMPUSettings->ulContext[ 12 ] = 0x01010101;                                       /* r1. */
     xMPUSettings->ulContext[ 13 ] = 0x02020202;                                       /* r2. */
@@ -290,53 +300,13 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
     xMPUSettings->ulContext[ 17 ] = ( ( uint32_t ) pxCode ) & portSTART_ADDRESS_MASK; /* PC. */
     xMPUSettings->ulContext[ 18 ] = portINITIAL_XPSR;                                 /* xPSR. */
 
-#if 0
+    /* Ensure that the system call stack is double word aligned. */
+    xMPUSettings->xSystemCallStackInfo.pulSystemCallStack = &( xMPUSettings->xSystemCallStackInfo.ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE - 1 ] );
+    xMPUSettings->xSystemCallStackInfo.pulSystemCallStack = ( uint32_t * ) ( ( uint32_t ) ( xMPUSettings->xSystemCallStackInfo.pulSystemCallStack ) &
+                                                                                ( uint32_t ) ( ~( portBYTE_ALIGNMENT_MASK ) ) );
 
-    /* Version of this from before I knew that you set PC to a magic number to leave an exception */
-    xMPUSettings->ulContext[ 0 ] = 0x08080808;                                        /* r8. */
-	xMPUSettings->ulContext[ 1 ] = 0x09090909;                                        /* r9. */
-	xMPUSettings->ulContext[ 2 ] = 0x10101010;                                        /* r10. */
-	xMPUSettings->ulContext[ 3 ] = 0x11111111;                                        /* r11. */
-    xMPUSettings->ulContext[ 4 ] = 0x04040404;                                        /* r4. */
-    xMPUSettings->ulContext[ 5 ] = 0x05050505;                                        /* r5. */
-    xMPUSettings->ulContext[ 6 ] = 0x06060606;                                        /* r6. */
-    xMPUSettings->ulContext[ 7 ] = 0x07070707;                                        /* r7. */
-
-    if( xRunPrivileged == pdTRUE )
-    {
-        xMPUSettings->ulTaskFlags |= portTASK_IS_PRIVILEGED_FLAG;
-        xMPUSettings->ulContext[ 8 ] = portINITIAL_CONTROL_IF_PRIVILEGED;
-    }
-    else
-    {
-        xMPUSettings->ulTaskFlags &= ( ~( portTASK_IS_PRIVILEGED_FLAG ) );
-        xMPUSettings->ulContext[ 8 ] = portINITIAL_CONTROL_IF_UNPRIVILEGED;
-    }
-
-    xMPUSettings->ulContext[ 9 ] = portINITIAL_EXC_RETURN;                            /* EXC_RETURN. */
-    xMPUSettings->ulContext[ 10 ] = ( uint32_t ) ( pxTopOfStack - 8 );                /* PSP with the hardware saved stack. */
-
-    xMPUSettings->ulContext[ 11 ] = ( uint32_t ) pvParameters;                        /* r0. */
-    xMPUSettings->ulContext[ 12 ] = 0x01010101;                                       /* r1. */
-    xMPUSettings->ulContext[ 13 ] = 0x02020202;                                       /* r2. */
-    xMPUSettings->ulContext[ 14 ] = 0x03030303;                                       /* r3. */
-
-    xMPUSettings->ulContext[ 15 ] = 0x12121212;                                       /* r12. */
-    xMPUSettings->ulContext[ 16 ] = 0;                                                /* LR. */
-    xMPUSettings->ulContext[ 17 ] = ( ( uint32_t ) pxCode ) & portSTART_ADDRESS_MASK; /* PC. */
-    xMPUSettings->ulContext[ 18 ] = portINITIAL_XPSR;                                 /* xPSR. */
-#endif
-    #if ( configUSE_MPU_WRAPPERS_V1 == 0 )
-    {
-        /* Ensure that the system call stack is double word aligned. */
-        xMPUSettings->xSystemCallStackInfo.pulSystemCallStack = &( xMPUSettings->xSystemCallStackInfo.ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE - 1 ] );
-        xMPUSettings->xSystemCallStackInfo.pulSystemCallStack = ( uint32_t * ) ( ( uint32_t ) ( xMPUSettings->xSystemCallStackInfo.pulSystemCallStack ) &
-                                                                                 ( uint32_t ) ( ~( portBYTE_ALIGNMENT_MASK ) ) );
-
-        /* This is not NULL only for the duration of a system call. */
-        xMPUSettings->xSystemCallStackInfo.pulTaskStack = NULL;
-    }
-    #endif /* #if ( configUSE_MPU_WRAPPERS_V1 == 0 ) */
+    /* This is not NULL only for the duration of a system call. */
+    xMPUSettings->xSystemCallStackInfo.pulTaskStack = NULL;
 
     return &( xMPUSettings->ulContext[ 19 ] );
 }
