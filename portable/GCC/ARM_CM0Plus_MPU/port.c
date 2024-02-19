@@ -176,12 +176,6 @@ BaseType_t xIsPrivileged( void ) __attribute__( ( naked ) ) FREERTOS_SYSTEM_CALL
  */
 void vResetPrivilege( void ) __attribute__( ( naked ) ) FREERTOS_SYSTEM_CALL;
 
-/*
- * C portion of the SVC handler.  The SVC handler is split between an asm entry
- * and a C wrapper for simplicity of coding and maintenance.
- */
-void vSVCHandler_C( uint32_t * pulRegisters ) __attribute__( ( noinline ) ) PRIVILEGED_FUNCTION;
-
 
 /**
  * @brief Make a task unprivileged.
@@ -233,6 +227,12 @@ void vSystemCallExit( uint32_t * pulSystemCallStack,
  * @return pdTRUE if the calling task is privileged, pdFALSE otherwise.
  */
 BaseType_t xPortIsTaskPrivileged( void ) PRIVILEGED_FUNCTION;
+
+/*
+ * Used to catch tasks that attempt to return from their implementing function.
+ */
+static void prvTaskExitError( void );
+
 /* ----------------------------------------------------------------------------------- */
 
 /* Each task maintains its own interrupt status in the critical nesting
@@ -296,7 +296,7 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
     xMPUSettings->ulContext[ 13 ] = 0x02020202;                                       /* r2. */
     xMPUSettings->ulContext[ 14 ] = 0x03030303;                                       /* r3. */
     xMPUSettings->ulContext[ 15 ] = 0x12121212;                                       /* r12. */
-    xMPUSettings->ulContext[ 16 ] = 0;                                                /* LR. */
+    xMPUSettings->ulContext[ 16 ] = ( uint32_t ) prvTaskExitError;                                 /* LR. */
     xMPUSettings->ulContext[ 17 ] = ( ( uint32_t ) pxCode ) & portSTART_ADDRESS_MASK; /* PC. */
     xMPUSettings->ulContext[ 18 ] = portINITIAL_XPSR;                                 /* xPSR. */
 
@@ -697,13 +697,22 @@ void SysTick_Handler( void )
  */
 __attribute__( ( weak ) ) void vPortSetupTimerInterrupt( void )
 {
-    /* Stop and clear the SysTick. */
+    /* Calculate the constants required to configure the tick interrupt. */
+    #if ( configUSE_TICKLESS_IDLE == 1 )
+    {
+        ulTimerCountsForOneTick = ( configSYSTICK_CLOCK_HZ / configTICK_RATE_HZ );
+        xMaximumPossibleSuppressedTicks = portMAX_24_BIT_NUMBER / ulTimerCountsForOneTick;
+        ulStoppedTimerCompensation = portMISSED_COUNTS_FACTOR / ( configCPU_CLOCK_HZ / configSYSTICK_CLOCK_HZ );
+    }
+    #endif /* configUSE_TICKLESS_IDLE */
+
+    /* Stop and reset the SysTick. */
     portNVIC_SYSTICK_CTRL_REG = 0UL;
     portNVIC_SYSTICK_CURRENT_VALUE_REG = 0UL;
 
     /* Configure SysTick to interrupt at the requested rate. */
     portNVIC_SYSTICK_LOAD_REG = ( configSYSTICK_CLOCK_HZ / configTICK_RATE_HZ ) - 1UL;
-    portNVIC_SYSTICK_CTRL_REG = ( portNVIC_SYSTICK_CLK | portNVIC_SYSTICK_INT | portNVIC_SYSTICK_ENABLE );
+    portNVIC_SYSTICK_CTRL_REG = ( portNVIC_SYSTICK_CLK_BIT_CONFIG | portNVIC_SYSTICK_INT_BIT | portNVIC_SYSTICK_ENABLE_BIT );
 }
 /* ----------------------------------------------------------------------------------- */
 
@@ -769,7 +778,7 @@ static void prvSetupMPU( void )
                                        ( portMPU_REGION_ENABLE );
 
         /* Enable the memory fault exception. */
-        // portNVIC_SYS_CTRL_STATE_REG |= portNVIC_MEM_FAULT_ENABLE;
+        portNVIC_SYS_CTRL_STATE_REG |= portNVIC_MEM_FAULT_ENABLE;
 
         /* Enable the MPU with the background region configured. */
         portMPU_CTRL_REG |= ( portMPU_ENABLE | portMPU_BACKGROUND_ENABLE );
@@ -1027,6 +1036,22 @@ BaseType_t xPortIsAuthorizedToAccessBuffer( const void * pvBuffer,
 /* ----------------------------------------------------------------------------------- */
 
 #if ( configASSERT_DEFINED == 1 )
+
+    static void prvTaskExitError( void )
+    {
+        /* A function that implements a task must not exit or attempt to return to
+        * its caller as there is nothing to return to.  If a task wants to exit it
+        * should instead call vTaskDelete( NULL ).
+        *
+        * Artificially force an assert() to be triggered if configASSERT() is
+        * defined, then stop here so application writers can catch the error. */
+        configASSERT( uxCriticalNesting == ~0UL );
+        portDISABLE_INTERRUPTS();
+
+        for( ; ; )
+        {
+        }
+    }
 
     void vPortValidateInterruptPriority( void )
     {

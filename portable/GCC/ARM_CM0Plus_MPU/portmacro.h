@@ -188,6 +188,16 @@ typedef struct MPU_SETTINGS
 #define portNVIC_SHPR3_REG                    ( *( ( volatile uint32_t * ) 0xe000ed20 ) )
 
 /* Constants required to access and manipulate the SysTick. */
+#define portNVIC_SYSTICK_CLK_BIT              ( 1UL << 2UL )
+#define portNVIC_SYSTICK_INT_BIT              ( 1UL << 1UL )
+#define portNVIC_SYSTICK_ENABLE_BIT           ( 1UL << 0UL )
+#define portNVIC_SYSTICK_COUNT_FLAG_BIT       ( 1UL << 16UL )
+#define portNVIC_PEND_SYSTICK_SET_BIT         ( 1UL << 26UL )
+#define portNVIC_PEND_SYSTICK_CLEAR_BIT       ( 1UL << 25UL )
+#define portMIN_INTERRUPT_PRIORITY            ( 255UL )
+#define portNVIC_PENDSV_PRI                   ( portMIN_INTERRUPT_PRIORITY << 16UL )
+#define portNVIC_SYSTICK_PRI                  ( portMIN_INTERRUPT_PRIORITY << 24UL )
+
 #define portNVIC_SYSTICK_INT                      ( 0x00000002UL )
 #define portNVIC_SYSTICK_ENABLE                   ( 0x00000001UL )
 #define portNVIC_SVC_PRI                          ( ( ( uint32_t ) configMAX_SYSCALL_INTERRUPT_PRIORITY - 1UL ) << 24UL )
@@ -421,11 +431,22 @@ portFORCE_INLINE static void vPortSetBASEPRI( uint32_t ulNewMaskValue )
 #endif
 /*-----------------------------------------------------------*/
 
-
-
 /* MPU Defines */
 #define portMPU_RASR_TEX_S_C_B_MASK 0x3FUL
 #define portMPU_RASR_TEX_S_C_B_LOCATION 16U
+#define portNVIC_MEM_FAULT_ENABLE                 ( 1UL << 16UL )
+
+/* Let the user override the default SysTick clock rate.  If defined by the
+ * user, this symbol must equal the SysTick clock rate when the CLK bit is 0 in the
+ * configuration register. */
+#ifndef configSYSTICK_CLOCK_HZ
+    #define configSYSTICK_CLOCK_HZ             ( configCPU_CLOCK_HZ )
+    /* Ensure the SysTick is clocked at the same frequency as the core. */
+    #define portNVIC_SYSTICK_CLK_BIT_CONFIG    ( portNVIC_SYSTICK_CLK_BIT )
+#else
+    /* Select the option to clock SysTick not at the same frequency as the core. */
+    #define portNVIC_SYSTICK_CLK_BIT_CONFIG    ( 0 )
+#endif
 
 /* *INDENT-OFF* */
 #ifdef __cplusplus

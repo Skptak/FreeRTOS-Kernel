@@ -59,6 +59,7 @@
 
     /* These must be in sync with portmacro.h. */
     #define portSVC_START_SCHEDULER        100
+    #define portSVC_YIELD                  101
     #define portSVC_SYSTEM_CALL_EXIT       103
 
     #define portINITIAL_EXC_RETURN      0xfffffffdUL
@@ -248,8 +249,15 @@ SVC_Handler:
         cmp     R2, R3
         beq     start_first_task
 
-        /* If not the above go to vSVCHandler_C */
-        bl vSVCHandler_C
+        /* Handle a pending SVC */
+        /* Last case, the SVC yield */
+        //LDR     r3, =#portSVC_YIELD
+        //CMP     r2, r3
+        LDR     r3, =#0xe000ed04
+        MOVS     r2, #1
+        LSLS    r2, #28
+        STR     r3, [r2]
+        BLX     LR
 
 
     syscall_enter:
@@ -308,7 +316,7 @@ PendSV_Handler:
     /*---------- Select next task. --------- */
     push   {r3, r14}
     cpsid  i
-    bl     vTaskSwitchContext
+    blx     vTaskSwitchContext
     cpsie  i
 
     portRESTORE_CONTEXT
