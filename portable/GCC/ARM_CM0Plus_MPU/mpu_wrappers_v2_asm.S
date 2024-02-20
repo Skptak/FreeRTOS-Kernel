@@ -110,7 +110,7 @@ ulPortCountLeadingZeros:
     MRS     R0, CONTROL
     MOVS    R1, #1
     /* Check if we're in user mode */
-    ANDS    R0, R0, R1
+    CMP    R0, R0, R1
     /* Restore the pushed register */
     POP     {R0, R1}
 .endm
