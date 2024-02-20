@@ -86,11 +86,12 @@ portRESTORE_CONTEXT:
     /* r2 = Second item in the TCB which is xMPUSettings. */
     adds      r2, r2, #4
     /* Load the address of pulSystemCallStack */
-    MOV     R3, R2
-    ADDS    R3, R3, #0xB8
-    LDR     R3, [R3]
+    //MOV     R3, R2
+    //ADDS    R3, R3, #0xB8
+    //LDR     R3, [R3]
+    /* TODO: Should we move up to account for system call entry? */
     /* Set the Main Stack Pointer to be pulSystemCallStack */
-    MSR     MSP, R3
+    //MSR     MSP, R3???
 
     /* Complete outstanding transfers before disabling MPU. */
     dmb
@@ -115,18 +116,18 @@ portRESTORE_CONTEXT:
     STR     R5, [R0, #0x4]
 
     /* Read 1 set of MPU registers [MPU Region # 1].*/
-    ldmia r2!, {r4-r5}
+    ldmia   r2!, {r4-r5}
     /* Write 1 set of MPU registers [MPU Region # 1 ]. */
     STR     R4, [R0]
     STR     R5, [R0, #0x4]
     /* Read 1 set of MPU registers [MPU Region # 2].*/
-    ldmia r2!, {r4-r5}
+    ldmia   r2!, {r4-r5}
     /* Write 1 set of MPU registers [MPU Region # 2 ]. */
     STR     R4, [R0]
     STR     R5, [R0, #0x4]
 
     /* Read 1 set of MPU registers [MPU Region # 3].*/
-    ldmia r2!, {r4-r5}
+    ldmia   r2!, {r4-r5}
     /* Write 1 set of MPU registers [MPU Region # 3 ]. */
     STR     R4, [R0]
     STR     R5, [R0, #0x4]
@@ -219,7 +220,7 @@ vPortStartFirstTask:
 .global SVC_Handler
 .type SVC_Handler, %function
 SVC_Handler:
-    ldr r0, =#4
+    MOVS r0, #0x4
     mov r1, lr
     tst r1, r0
     beq load_msp
@@ -262,11 +263,20 @@ SVC_Handler:
 
     syscall_enter:
         mov r1, lr
+        mov R4, LR
         bl vSystemCallEnter
+        /* TODO: Set R2 to EXC_Return */
+        LDR     R0, =#portINITIAL_EXC_RETURN
+        BX     R0
+
 
     syscall_exit:
         mov r1, lr
         bl vSystemCallExit
+        /* TODO: Set R2 to EXC_Return */
+        LDR     R0, =#portINITIAL_EXC_RETURN
+        BX     R0
+
 
     start_first_task:
         portRESTORE_CONTEXT
@@ -283,7 +293,7 @@ PendSV_Handler:
     /* The first item in pxCurrentTCB is the location of the task context. */
     LDR     R0, [R2]
     /* Make room for the hardware saved context */
-    SUBS    R0, #0x20
+    SUBS    R0, #0x30
     /* Push the low registers R4-R7 */
     STMIA   R0!, {R4-R7}
 
@@ -298,12 +308,17 @@ PendSV_Handler:
     MOV     R5, R10
     MOV     R6, R11
 
+    /* Move up past the saved registers */
+    SUBS    R0, #0x10
+
     /* Store the remaining high registers */
     STMIA   R0!, { R1-R6 }
 
     /* Load the first six hardware saved registers from the task stack */
     LDMIA   R1!, { R2-R7 }
 
+    /* Move past the saved registers */
+    ADDS    R0, #0x20
     /* Store the first six hardware saved registers to ulContext */
     STMIA   R0!, { R2-R7 }
 

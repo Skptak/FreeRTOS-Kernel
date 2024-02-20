@@ -78,7 +78,7 @@ xPortIsPrivileged:
     /* Load value of CONTROL into R0 */
     MRS     R0, CONTROL
     /* CONTROL bit is high if unprivileged */
-    MOVS   r0, 0x1
+    MOVS    r0, 0x1
     /* If CONTROL is high, set R0 to 0 */
     EORS     R0, R1
     /* Restore the pushed register */
@@ -105,14 +105,13 @@ ulPortCountLeadingZeros:
 
 .macro processorIsPrivileged
     /* Push R0 and R1 before using them */
-    PUSH    {R0, R1}
+    PUSH    { R0 }
     /* Load value of SPSR into R0 */
     MRS     R0, CONTROL
-    MOVS    R1, #1
     /* Check if we're in user mode */
-    CMP    R0, R0, R1
+    CMP     R0, #0
     /* Restore the pushed register */
-    POP     {R0, R1}
+    POP     { R0 }
 .endm
 
 /*---------------------------------------------------------------------------*/
@@ -131,7 +130,7 @@ MPU_xTaskGetTickCount:
         SVC     #SYSTEM_CALL_xTaskGetTickCount
     MPU_xTaskGetTickCount_Privileged:
         PUSH    { LR }
-        BLX MPU_xTaskGetTickCountImpl
+        BLX     MPU_xTaskGetTickCountImpl
         POP     { PC }
 
 /*---------------------------------------------------------------------------*/

@@ -51,15 +51,15 @@
 /* Type definitions. */
 #define portCHAR          char
 #define portFLOAT         float
-#define portDOUBLE        double
-#define portLONG          long
-#define portSHORT         short
+#define portDOUBLE        int64_t
+#define portLONG          int32_t
+#define portSHORT         int8_t
 #define portSTACK_TYPE    uint32_t
-#define portBASE_TYPE     long
+#define portBASE_TYPE     int32_t
 
 typedef portSTACK_TYPE   StackType_t;
-typedef long             BaseType_t;
-typedef unsigned long    UBaseType_t;
+typedef int32_t         BaseType_t;
+typedef uint32_t   		 UBaseType_t;
 
 #if ( configTICK_TYPE_WIDTH_IN_BITS == TICK_TYPE_WIDTH_16_BITS )
     typedef uint16_t     TickType_t;

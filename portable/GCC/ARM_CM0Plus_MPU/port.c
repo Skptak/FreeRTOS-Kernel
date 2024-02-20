@@ -40,6 +40,7 @@
 #include "task.h"
 #include "portmacro.h"
 #include "mpu_syscall_numbers.h"
+#include "mpu_wrappers_v2_asm.h"
 
 #ifndef __VFP_FP__
     //#error This port can only be used when the project options are configured to enable hardware floating point support.
@@ -233,6 +234,8 @@ BaseType_t xPortIsTaskPrivileged( void ) PRIVILEGED_FUNCTION;
  */
 static void prvTaskExitError( void );
 
+
+//extern void MPU_vTaskDelayImpl( TickType_t xTicksToDelay ) PRIVILEGED_FUNCTION;
 /* ----------------------------------------------------------------------------------- */
 
 /* Each task maintains its own interrupt status in the critical nesting
@@ -296,7 +299,7 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
     xMPUSettings->ulContext[ 13 ] = 0x02020202;                                       /* r2. */
     xMPUSettings->ulContext[ 14 ] = 0x03030303;                                       /* r3. */
     xMPUSettings->ulContext[ 15 ] = 0x12121212;                                       /* r12. */
-    xMPUSettings->ulContext[ 16 ] = ( uint32_t ) prvTaskExitError;                                 /* LR. */
+    xMPUSettings->ulContext[ 16 ] = ( uint32_t ) prvTaskExitError;                    /* LR. */
     xMPUSettings->ulContext[ 17 ] = ( ( uint32_t ) pxCode ) & portSTART_ADDRESS_MASK; /* PC. */
     xMPUSettings->ulContext[ 18 ] = portINITIAL_XPSR;                                 /* xPSR. */
 
@@ -355,12 +358,12 @@ void vSVCHandler_C( uint32_t * pulParam ) /* PRIVILEGED_FUNCTION */
 }
 /* ----------------------------------------------------------------------------------- */
 
-void vSystemCallEnter( uint32_t * pulTaskStack,
+void vSystemCallEnter(  uint32_t * pulTaskStack,
                         uint32_t ulLR,
                         uint8_t ucSystemCallNumber ) /* PRIVILEGED_FUNCTION */
 {
     extern TaskHandle_t pxCurrentTCB;
-    extern UBaseType_t uxSystemCallImplementations[ NUM_SYSTEM_CALLS ];
+	extern UBaseType_t uxSystemCallImplementations[ NUM_SYSTEM_CALLS ];
     xMPU_SETTINGS * pxMpuSettings;
     uint32_t * pulSystemCallStack;
     uint32_t ulStackFrameSize, ulSystemCallLocation, i;
@@ -378,6 +381,7 @@ void vSystemCallEnter( uint32_t * pulTaskStack,
 
     ulSystemCallLocation = pulTaskStack[ portOFFSET_TO_PC ];
     pxMpuSettings = xTaskGetMPUSettings( pxCurrentTCB );
+    //configASSERT(uxSystemCallImplementations[ SYSTEM_CALL_vTaskDelay ] == MPU_vTaskDelayImpl );
 
     /* Checks:
         * 1. SVC is raised from the system call section (i.e. application is
@@ -399,7 +403,7 @@ void vSystemCallEnter( uint32_t * pulTaskStack,
         pulSystemCallStack = pxMpuSettings->xSystemCallStackInfo.pulSystemCallStack;
 
         /* Standard frame i.e. FPU not in use. */
-        ulStackFrameSize = 8;
+        ulStackFrameSize = 8UL;
 
         /* Make space on the system call stack for the stack frame. */
         pulSystemCallStack = pulSystemCallStack - ulStackFrameSize;
@@ -416,10 +420,12 @@ void vSystemCallEnter( uint32_t * pulTaskStack,
         /* Raise the privilege for the duration of the system call. */
         __asm volatile (
             " .syntax unified       \n"
+        	" PUSH	{ R0-R1 }		\n" /* Save registers before use */
             " movs  r0, #1          \n"
             " mrs   r1, control     \n" /* Obtain current control value. */
             " bics  r1, r0          \n" /* Clear nPRIV bit. */
             " msr   control, r1     \n" /* Write back new control value. */
+			" POP	{ R0-R1 }		\n" /* Restore registers after use */
             ::: "r1", "memory"
             );
 
@@ -504,7 +510,7 @@ void vSystemCallExit( uint32_t * pulSystemCallStack,
         pulTaskStack = pxMpuSettings->xSystemCallStackInfo.pulTaskStack;
 
         /* Standard frame i.e. FPU not in use. */
-        ulStackFrameSize = 8;
+        ulStackFrameSize = 8UL;
 
         /* Make space on the task stack for the stack frame. */
         pulTaskStack = pulTaskStack - ulStackFrameSize;
