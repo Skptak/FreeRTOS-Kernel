@@ -292,33 +292,34 @@ PendSV_Handler:
     LDR     R2, [r3]
     /* The first item in pxCurrentTCB is the location of the task context. */
     LDR     R0, [R2]
-    /* Make room for the hardware saved context */
-    SUBS    R0, #0x30
-    /* Push the low registers R4-R7 */
-    STMIA   R0!, {R4-R7}
+    /* Move to where EXC_Return, the PSP, and R4-R7 should be saved */
+    SUBS    R0, #0x38
 
-    /* Move the Task Stack Pointer into R1 */
-    MRS     R1, PSP
-    /* TODO: Set R2 to EXC_Return */
+    /* TODO: Set R2 to the correct EXC_Return? */
     LDR     R2, =#portINITIAL_EXC_RETURN
+    /* Move the Task Stack Pointer into R3 */
+    MRS     R3, PSP
+
+    /* Push EXC_Return, PSP, and R4-R7 */
+    STMIA   R0!, {R2-R7}
+    /* Can only use STM with auto-increment. So move past the just saved
+     * registers */
+    SUBS    R0, #0x28
     
-    /* Move high registers into open low registers */
+    /* Move high registers into already-saved low registers */
     MOV     R3, R8
     MOV     R4, R9
     MOV     R5, R10
     MOV     R6, R11
 
-    /* Move up past the saved registers */
-    SUBS    R0, #0x10
-
-    /* Store the remaining high registers */
-    STMIA   R0!, { R1-R6 }
+    /* Store R8-R11 into ulContext */
+    STMIA   R0!, { R3-R6 }
+    /* Move down the stack past EXC_Return, PSP, and R4-R7 */
+    ADDS    R0, #0x18
 
     /* Load the first six hardware saved registers from the task stack */
     LDMIA   R1!, { R2-R7 }
 
-    /* Move past the saved registers */
-    ADDS    R0, #0x20
     /* Store the first six hardware saved registers to ulContext */
     STMIA   R0!, { R2-R7 }
 
@@ -329,7 +330,7 @@ PendSV_Handler:
     STMIA   R0!, { R2-R3 }
 
     /*---------- Select next task. --------- */
-    push   {r3, r14}
+    //push   {r3, r14}
     cpsid  i
     blx     vTaskSwitchContext
     cpsie  i
