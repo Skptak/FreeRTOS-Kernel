@@ -306,6 +306,9 @@ PendSV_Handler:
      * registers */
     SUBS    R0, #0x28
     
+    /* Now want PSP in R1 */
+    MOV     R1, R3
+
     /* Move high registers into already-saved low registers */
     MOV     R3, R8
     MOV     R4, R9
