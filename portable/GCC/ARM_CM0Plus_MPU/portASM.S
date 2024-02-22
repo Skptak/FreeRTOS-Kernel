@@ -60,7 +60,7 @@
     /* These must be in sync with portmacro.h. */
     #define portSVC_START_SCHEDULER        100
     #define portSVC_YIELD                  101
-    #define portSVC_SYSTEM_CALL_EXIT       103
+    #define portSVC_SYSTEM_CALL_EXIT       104
 
     #define portINITIAL_EXC_RETURN      0xfffffffdUL
 
@@ -81,65 +81,57 @@ portRESTORE_CONTEXT:
     /* ------------ Program MPU. ------------ */
     /* r3 = &pxCurrentTCB. */
     ldr       r3, =pxCurrentTCB
-    /* r2 = pxCurrentTCB. */
-    ldr       r2, [r3]
+    /* r0 = pxCurrentTCB. */
+    ldr       r0, [r3]
     /* r2 = Second item in the TCB which is xMPUSettings. */
-    adds      r2, r2, #4
-    /* Load the address of pulSystemCallStack */
-    //MOV     R3, R2
-    //ADDS    R3, R3, #0xB8
-    //LDR     R3, [R3]
-    /* TODO: Should we move up to account for system call entry? */
-    /* Set the Main Stack Pointer to be pulSystemCallStack */
-    //MSR     MSP, R3???
+    adds      r0, #4
 
     /* Complete outstanding transfers before disabling MPU. */
     dmb
     /* MPU_CTRL register. */
-    ldr     r0, =0xe000ed94
+    ldr     r1, =0xe000ed94
     /* Read the value of MPU_CTRL. */
-    ldr     r3, [r0]
-    movs    r1, #0x1
-    /* r3 = r3 & ~1 i.e. Clear the bit 0 in r3. */
-    bics    r3, r3, r1
+    ldr     r2, [r1]
+    movs    r3, #0x1
+    /* r2 = r2 & ~1 i.e. Clear the bit 0 in r2. */
+    bics    r2, r2, r3
     /* Disable MPU. */
-    str     r3, [r0]
+    str     r2, [r1]
 
 
     /* Region Base Address register. */
-    ldr   r0, =0xE000ED9C
+    ldr   r1, =0xE000ED98   /* r1 = 0xE000ED98 [Location of RNR] */
+    ldr	  r2, =0xe000ed9c   /* r2 = 0xe000ed9c [Location of RBAR]. */
+    ldr   r3, =0xe000eda0   /* r3 = 0xe000eda0 [Location of RASR]. */
 
-    /* Read 1 set of MPU registers [MPU Region # 0].*/
-    ldmia r2!, {r4-r5}
-    /* Write 1 set of MPU registers [MPU Region # 0 ]. */
-    STR     R4, [R0]
-    STR     R5, [R0, #0x4]
+    ldmia r0!, {r5-r6}      /* Read first set of RBAR/RASR registers from TCB. */
+    str r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
+    str r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
 
-    /* Read 1 set of MPU registers [MPU Region # 1].*/
-    ldmia   r2!, {r4-r5}
-    /* Write 1 set of MPU registers [MPU Region # 1 ]. */
-    STR     R4, [R0]
-    STR     R5, [R0, #0x4]
-    /* Read 1 set of MPU registers [MPU Region # 2].*/
-    ldmia   r2!, {r4-r5}
-    /* Write 1 set of MPU registers [MPU Region # 2 ]. */
-    STR     R4, [R0]
-    STR     R5, [R0, #0x4]
+    ldmia r0!, {r5-r6}      /* Read second set of RBAR/RASR registers from TCB. */
+    str r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
+    str r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
 
-    /* Read 1 set of MPU registers [MPU Region # 3].*/
-    ldmia   r2!, {r4-r5}
-    /* Write 1 set of MPU registers [MPU Region # 3 ]. */
-    STR     R4, [R0]
-    STR     R5, [R0, #0x4]
+    ldmia r0!, {r5-r6}      /* Read third set of RBAR/RASR registers from TCB. */
+    str r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
+    str r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
+
+    ldmia r0!, {r5-r6}      /* Read fourth set of RBAR/RASR registers from TCB. */
+    str r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
+    str r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
+
+    ldmia r0!, {r5-r6}      /* Read fifth set of RBAR/RASR registers from TCB. */
+    str r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
+    str r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
 
     /* MPU_CTRL register. */
-    ldr   r0, =0xe000ed94
+    ldr   r1, =0xe000ed94
     /* Read the value of MPU_CTRL. */
-    ldr   r3, [r0]
+    ldr   r3, [r1]
     /* r3 = r3 | 1 i.e. Set the bit 0 in r3. */
     orrs  r3, r3, r1
     /* Enable MPU. */
-    str   r3, [r0]
+    str   r3, [r1]
     /* Force memory writes before continuing. */
     dsb
 
@@ -265,22 +257,22 @@ SVC_Handler:
      svc_num_load:
         ldr r1, [r0, #24]
         subs r1, r1, #2
-        ldr r2, [r1]
+        ldr r1, [r1]
         /* Highest possible SVC on the M0+ is SVC #0xFF */
-        MOVS    R1, #0XFF
-        ANDS    R2, R2, R1
-        ldr r3, =#NUM_SYSTEM_CALLS
-        cmp r2, r3
+        MOVS    R2, #0XFF
+        ANDS    R1, R1, R2
+        ldr r2, =#NUM_SYSTEM_CALLS
+        cmp r1, r2
         blt syscall_enter
 
         /* System Call Exit SVC */
-        ldr  r3, =#portSVC_SYSTEM_CALL_EXIT
-        cmp r2, r3
+        ldr  r2, =#portSVC_SYSTEM_CALL_EXIT
+        cmp r1, r2
         beq syscall_exit
 
         /* Start the first task */
-        ldr     R3, =#portSVC_START_SCHEDULER
-        cmp     R2, R3
+        ldr     R2, =#portSVC_START_SCHEDULER
+        cmp     R1, R2
         beq     start_first_task
 
         /* Handle a pending SVC */
@@ -295,21 +287,15 @@ SVC_Handler:
 
 
     syscall_enter:
-        mov r1, lr
-        mov R4, LR
+        PUSH	{ LR }
         bl vSystemCallEnter
-        /* TODO: Set R2 to EXC_Return */
-        LDR     R0, =#portINITIAL_EXC_RETURN
-        BX     R0
+        POP		{ PC }
 
 
     syscall_exit:
-        mov r1, lr
-        mov R4, LR
+        PUSH	{ LR }
         bl vSystemCallExit
-        /* TODO: Set R2 to EXC_Return */
-        LDR     R0, =#portINITIAL_EXC_RETURN
-        BX     R0
+		POP		{ PC }
 
 
     start_first_task:
@@ -344,53 +330,6 @@ PendSV_Handler:
         stmia r1!, {r2-r4}                  /* Store original PSP (after hardware has saved context), PSPLIM, CONTROL and LR. */
         str r1, [r0]                        /* Save the location from where the context should be restored as the first member of TCB. */
 
-    #if 0
-    /* R3 = = &pxCurrentTCB */
-    LDR     R3, =pxCurrentTCB
-    /* r2 = pxCurrentTCB. */
-    LDR     R2, [r3]
-    /* The first item in pxCurrentTCB is the location of the task context. */
-    LDR     R0, [R2]
-    /* Move to where EXC_Return, the PSP, and R4-R7 should be saved */
-    SUBS    R0, #0x38
-
-    /* TODO: Set R2 to the correct EXC_Return? */
-    LDR     R2, =#portINITIAL_EXC_RETURN
-    /* Move the Task Stack Pointer into R3 */
-    MRS     R3, PSP
-
-    /* Push EXC_Return, PSP, and R4-R7 */
-    STMIA   R0!, {R2-R7}
-    /* Can only use STM with auto-increment. So move past the just saved
-     * registers */
-    SUBS    R0, #0x28
-    
-    /* Now want PSP in R1 */
-    MOV     R1, R3
-
-    /* Move high registers into already-saved low registers */
-    MOV     R3, R8
-    MOV     R4, R9
-    MOV     R5, R10
-    MOV     R6, R11
-
-    /* Store R8-R11 into ulContext */
-    STMIA   R0!, { R3-R6 }
-    /* Move down the stack past EXC_Return, PSP, and R4-R7 */
-    ADDS    R0, #0x18
-
-    /* Load the first six hardware saved registers from the task stack */
-    LDMIA   R1!, { R2-R7 }
-
-    /* Store the first six hardware saved registers to ulContext */
-    STMIA   R0!, { R2-R7 }
-
-    /* Load the last two hardware saved registers from the task stack */
-    LDMIA   R1!, { R2-R3 }
-
-    /* Store the last two hardware saved registers to ulContext */
-    STMIA   R0!, { R2-R3 }
-#endif
     /*---------- Select next task. --------- */
     //push   {r3, r14}
     cpsid  i

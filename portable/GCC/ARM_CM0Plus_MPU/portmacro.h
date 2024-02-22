@@ -94,13 +94,13 @@ void PendSV_Handler( void ) __attribute__( ( naked ) );
 #define portUSING_MPU_WRAPPERS                                   1
 #define portPRIVILEGE_BIT                                        ( 0x80000000UL )
 
-#define portMPU_REGION_READ_WRITE                                ( 0x03UL << 24UL )
-#define portMPU_REGION_PRIVILEGED_READ_ONLY                      ( 0x05UL << 24UL )
-#define portMPU_REGION_READ_ONLY                                 ( 0x06UL << 24UL )
-#define portMPU_REGION_PRIVILEGED_READ_WRITE                     ( 0x01UL << 24UL )
-#define portMPU_REGION_PRIVILEGED_READ_WRITE_UNPRIV_READ_ONLY    ( 0x02UL << 24UL )
-#define portMPU_REGION_CACHEABLE_BUFFERABLE                      ( 0x07UL << 16UL )
-#define portMPU_REGION_EXECUTE_NEVER                             ( 0x01UL << 28UL )
+#define portMPU_REGION_READ_WRITE                                ( 0x3UL << 24UL )
+#define portMPU_REGION_PRIVILEGED_READ_ONLY                      ( 0x5UL << 24UL )
+#define portMPU_REGION_READ_ONLY                                 ( 0x6UL << 24UL )
+#define portMPU_REGION_PRIVILEGED_READ_WRITE                     ( 0x1UL << 24UL )
+#define portMPU_REGION_PRIVILEGED_READ_WRITE_UNPRIV_READ_ONLY    ( 0x2UL << 24UL )
+#define portMPU_REGION_CACHEABLE_BUFFERABLE                      ( 0x7UL << 16UL )
+#define portMPU_REGION_EXECUTE_NEVER                             ( 0x1UL << 28UL )
 
 #define portSTACK_REGION                                         ( 4UL )
 #define portUNPRIVILEGED_FLASH_REGION                            ( 5UL )
@@ -124,21 +124,19 @@ typedef struct MPU_REGION_SETTINGS
     uint32_t ulRegionPermissions;
 } xMPU_REGION_SETTINGS;
 
-#if ( configUSE_MPU_WRAPPERS_V1 == 0 )
 
-    #ifndef configSYSTEM_CALL_STACK_SIZE
-        #error configSYSTEM_CALL_STACK_SIZE must be defined to the desired size of the system call stack in words for using MPU wrappers v2.
-    #endif
+#ifndef configSYSTEM_CALL_STACK_SIZE
+    #error configSYSTEM_CALL_STACK_SIZE must be defined to the desired size of the system call stack in words for using MPU wrappers v2.
+#endif
 
-    typedef struct SYSTEM_CALL_STACK_INFO
-    {
-        uint32_t * pulSystemCallStack;
-        uint32_t * pulTaskStack;
-        uint32_t ulLinkRegisterAtSystemCallEntry;
-        uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ];
-    } xSYSTEM_CALL_STACK_INFO;
+typedef struct SYSTEM_CALL_STACK_INFO
+{
+    uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ];
+    uint32_t * pulSystemCallStack;
+    uint32_t * pulTaskStack;
+    uint32_t ulLinkRegisterAtSystemCallEntry;
+} xSYSTEM_CALL_STACK_INFO;
 
-#endif /* #if ( configUSE_MPU_WRAPPERS_V1 == 0 ) */
 
 #define MAX_CONTEXT_SIZE                    ( 20 )
 
@@ -156,11 +154,9 @@ typedef struct MPU_SETTINGS
     uint32_t ulContext[ MAX_CONTEXT_SIZE ];
     uint32_t ulTaskFlags;
 
-    #if ( configUSE_MPU_WRAPPERS_V1 == 0 )
-        xSYSTEM_CALL_STACK_INFO xSystemCallStackInfo;
-        #if ( configENABLE_ACCESS_CONTROL_LIST == 1 )
-            uint32_t ulAccessControlList[ ( configPROTECTED_KERNEL_OBJECT_POOL_SIZE / portACL_ENTRY_SIZE_BITS ) + 1 ];
-        #endif
+    xSYSTEM_CALL_STACK_INFO xSystemCallStackInfo;
+    #if ( configENABLE_ACCESS_CONTROL_LIST == 1 )
+        uint32_t ulAccessControlList[ ( configPROTECTED_KERNEL_OBJECT_POOL_SIZE / portACL_ENTRY_SIZE_BITS ) + 1 ];
     #endif
 } xMPU_SETTINGS;
 
@@ -176,7 +172,6 @@ typedef struct MPU_SETTINGS
 /* SVC numbers for various services. */
 #define portSVC_START_SCHEDULER        100
 #define portSVC_YIELD                  101
-#define portSVC_RAISE_PRIVILEGE        102
 #define portSVC_SYSTEM_CALL_EXIT       104
 
 /* Constants used to check the installation of the FreeRTOS interrupt handlers. */

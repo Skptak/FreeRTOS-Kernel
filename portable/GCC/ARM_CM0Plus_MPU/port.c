@@ -198,11 +198,9 @@ void vPortExitCritical( void ) PRIVILEGED_FUNCTION;
  * SVC, the system call stack is used.
  *
  * @param pulTaskStack The current SP when the SVC was raised.
- * @param ulLR The value of Link Register (EXC_RETURN) in the SVC handler.
  * @param ucSystemCallNumber The system call number of the system call.
  */
     void vSystemCallEnter( uint32_t * pulTaskStack,
-                           uint32_t ulLR,
                            uint8_t ucSystemCallNumber ) PRIVILEGED_FUNCTION;
 
 
@@ -217,10 +215,8 @@ void vRequestSystemCallExit( void ) __attribute__( ( naked ) ) PRIVILEGED_FUNCTI
  * SVC, the task stack is used again.
  *
  * @param pulSystemCallStack The current SP when the SVC was raised.
- * @param ulLR The value of Link Register (EXC_RETURN) in the SVC handler.
  */
-void vSystemCallExit( uint32_t * pulSystemCallStack,
-                    uint32_t ulLR ) PRIVILEGED_FUNCTION;
+void vSystemCallExit( uint32_t * pulSystemCallStack ) PRIVILEGED_FUNCTION;
 
 /**
  * @brief Checks whether or not the calling task is privileged.
@@ -412,7 +408,6 @@ void vSVCHandler_C( uint32_t * pulParam ) /* PRIVILEGED_FUNCTION */
 /* ----------------------------------------------------------------------------------- */
 
 void vSystemCallEnter(  uint32_t * pulTaskStack,
-                        uint32_t ulLR,
                         uint8_t ucSystemCallNumber ) /* PRIVILEGED_FUNCTION */
 {
     extern TaskHandle_t pxCurrentTCB;
@@ -473,13 +468,11 @@ void vSystemCallEnter(  uint32_t * pulTaskStack,
         /* Raise the privilege for the duration of the system call. */
         __asm volatile (
             " .syntax unified       \n"
-        	" PUSH	{ R0-R1 }		\n" /* Save registers before use */
             " movs  r0, #1          \n"
             " mrs   r1, control     \n" /* Obtain current control value. */
             " bics  r1, r0          \n" /* Clear nPRIV bit. */
             " msr   control, r1     \n" /* Write back new control value. */
-			" POP	{ R0-R1 }		\n" /* Restore registers after use */
-            ::: "r1", "memory"
+            ::: "r0", "r1", "memory"
             );
 
         /* Remember the location where we should copy the stack frame when we exit from
@@ -525,8 +518,7 @@ void vRequestSystemCallExit( void ) /* __attribute__( ( naked ) ) PRIVILEGED_FUN
 
 /* ----------------------------------------------------------------------------------- */
 
-void vSystemCallExit( uint32_t * pulSystemCallStack,
-                        uint32_t ulLR ) /* PRIVILEGED_FUNCTION */
+void vSystemCallExit( uint32_t * pulSystemCallStack ) /* PRIVILEGED_FUNCTION */
 {
     extern TaskHandle_t pxCurrentTCB;
     xMPU_SETTINGS * pxMpuSettings;
@@ -584,7 +576,7 @@ void vSystemCallExit( uint32_t * pulSystemCallStack,
             " mrs   r1, control     \n" /* Obtain current control value. */
             " orrs  r1, r0          \n" /* Set nPRIV bit. */
             " msr   control, r1     \n" /* Write back new control value. */
-            ::: "r1", "memory"
+            ::: "r0", "r1", "memory"
             );
 
         /* Return to the caller of the System Call entry point (i.e. the
@@ -847,11 +839,11 @@ static void prvSetupMPU( void )
 
 static uint32_t prvGetMPURegionSizeSetting( uint32_t ulActualSizeInBytes )
 {
-    uint32_t ulRegionSize, ulReturnValue = 4;
+    uint32_t ulRegionSize, ulReturnValue = 7;
 
-    /* 32 is the smallest region size, 31 is the largest valid value for
+    /* 256 bytes is the smallest region size, 31 is the largest valid value for
      * ulReturnValue. */
-    for( ulRegionSize = 32UL; ulReturnValue < 31UL; ( ulRegionSize <<= 1UL ) )
+    for( ulRegionSize = 256UL; ulReturnValue < 31UL; ( ulRegionSize <<= 1UL ) )
     {
         if( ulActualSizeInBytes <= ulRegionSize )
         {
@@ -934,8 +926,8 @@ void vPortStoreTaskMPUSettings( xMPU_SETTINGS * xMPUSettings,
         extern uint32_t __privileged_data_end__[];
     #endif /* if defined( __ARMCC_VERSION ) */
 
-    int32_t lIndex;
-    uint32_t ul;
+    volatile int32_t lIndex;
+    volatile uint32_t ul;
 
     if( xRegions == NULL )
     {
