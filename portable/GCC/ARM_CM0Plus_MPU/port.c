@@ -91,8 +91,8 @@
 /* Constants required to set up the initial stack. */
 #define portINITIAL_XPSR                          ( 0x01000000UL )
 #define portINITIAL_EXC_RETURN                    ( 0xfffffffdUL )
-#define portINITIAL_CONTROL_IF_UNPRIVILEGED       ( 0x03 )
-#define portINITIAL_CONTROL_IF_PRIVILEGED         ( 0x02 )
+#define portINITIAL_CONTROL_UNPRIVILEGED       ( 0x03 )
+#define portINITIAL_CONTROL_PRIVILEGED         ( 0x02 )
 
 /* Constants required to check the validity of an interrupt priority. */
 #define portFIRST_USER_INTERRUPT_NUMBER           ( 16 )
@@ -234,6 +234,17 @@ BaseType_t xPortIsTaskPrivileged( void ) PRIVILEGED_FUNCTION;
  */
 static void prvTaskExitError( void );
 
+/**
+ * @brief Let the user override the pre-loading of the initial LR with the
+ * address of prvTaskExitError() in case it messes up unwinding of the stack
+ * in the debugger.
+ */
+#ifdef configTASK_RETURN_ADDRESS
+    #define portTASK_RETURN_ADDRESS    configTASK_RETURN_ADDRESS
+#else
+    #define portTASK_RETURN_ADDRESS    prvTaskExitError
+#endif
+
 
 //extern void MPU_vTaskDelayImpl( TickType_t xTicksToDelay ) PRIVILEGED_FUNCTION;
 /* ----------------------------------------------------------------------------------- */
@@ -270,28 +281,68 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
                                      BaseType_t xRunPrivileged,
                                      xMPU_SETTINGS * xMPUSettings )
 {
+    uint32_t ulIndex = 0UL;   
+    xMPUSettings->ulContext[ ulIndex ] = 0x04040404; /* r4. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = 0x05050505; /* r5. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = 0x06060606; /* r6. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = 0x07070707; /* r7. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = 0x08080808; /* r8. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = 0x09090909; /* r9. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = 0x10101010; /* r10. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = 0x11111111; /* r11. */
+    ulIndex++;
+    
+    xMPUSettings->ulContext[ ulIndex ] = ( uint32_t ) pvParameters;            /* r0. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = 0x01010101;                           /* r1. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = 0x02020202;                           /* r2. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = 0x03030303;                           /* r3. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = 0x12121212;                           /* r12. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = ( uint32_t ) portTASK_RETURN_ADDRESS; /* LR. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = ( uint32_t ) pxCode;                  /* PC. */
+    ulIndex++;
+    xMPUSettings->ulContext[ ulIndex ] = portINITIAL_XPSR;                     /* xPSR. */
+    ulIndex++;
+
+    xMPUSettings->ulContext[ ulIndex ] = ( uint32_t ) ( pxTopOfStack - 8 ); /* PSP with the hardware saved stack. */
+    ulIndex++;
+    
     if( xRunPrivileged == pdTRUE )
     {
         xMPUSettings->ulTaskFlags |= portTASK_IS_PRIVILEGED_FLAG;
-        xMPUSettings->ulContext[ 0 ] = portINITIAL_CONTROL_IF_PRIVILEGED;
+        xMPUSettings->ulContext[ ulIndex ] = ( uint32_t ) portINITIAL_CONTROL_PRIVILEGED; /* CONTROL. */
     }
     else
     {
-        xMPUSettings->ulTaskFlags &= ( ~( portTASK_IS_PRIVILEGED_FLAG ) );
-        xMPUSettings->ulContext[ 0 ] = portINITIAL_CONTROL_IF_UNPRIVILEGED;
+        xMPUSettings->ulTaskFlags &= ( ~portTASK_IS_PRIVILEGED_FLAG );
+        xMPUSettings->ulContext[ ulIndex ] = ( uint32_t ) portINITIAL_CONTROL_UNPRIVILEGED; /* CONTROL. */
+
     }
-    
-    xMPUSettings->ulContext[ 1 ] = 0x08080808;      /* r8. */
-	xMPUSettings->ulContext[ 2 ] = 0x09090909;      /* r9. */
-    xMPUSettings->ulContext[ 3 ] = 0x10101010;      /* r10. */
-	xMPUSettings->ulContext[ 4 ] = 0x11111111;      /* r11. */
-    
+    ulIndex++;
+
+    xMPUSettings->ulContext[ ulIndex ] = portINITIAL_EXC_RETURN; /* LR (EXC_RETURN). */
+    ulIndex++;
+
+#if 0
+
     xMPUSettings->ulContext[ 5 ] = portINITIAL_EXC_RETURN;              /* EXC_RETURN. */
     xMPUSettings->ulContext[ 6 ] = ( uint32_t ) ( pxTopOfStack - 8 );  /* PSP with the hardware saved stack. */
-	xMPUSettings->ulContext[ 7 ] = 0x04040404;      /* r4. */
-    xMPUSettings->ulContext[ 8 ] = 0x05050505;      /* r5. */
-    xMPUSettings->ulContext[ 9 ] = 0x06060606;      /* r6. */
-    xMPUSettings->ulContext[ 10 ] = 0x07070707;      /* r7. */
+	xMPUSettings->ulContext[ 7 ] = 0x04040404;  /* r4. */
+    xMPUSettings->ulContext[ 8 ] = 0x05050505;  /* r5. */
+    xMPUSettings->ulContext[ 9 ] = 0x06060606;  /* r6. */
+    xMPUSettings->ulContext[ 10 ] = 0x07070707; /* r7. */
 
     /* Auto-Pushed Registers */
     xMPUSettings->ulContext[ 11 ] = ( uint32_t ) pvParameters;                        /* r0. */
@@ -303,6 +354,8 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
     xMPUSettings->ulContext[ 17 ] = ( ( uint32_t ) pxCode ) & portSTART_ADDRESS_MASK; /* PC. */
     xMPUSettings->ulContext[ 18 ] = portINITIAL_XPSR;                                 /* xPSR. */
 
+#endif
+
     /* Ensure that the system call stack is double word aligned. */
     xMPUSettings->xSystemCallStackInfo.pulSystemCallStack = &( xMPUSettings->xSystemCallStackInfo.ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE - 1 ] );
     xMPUSettings->xSystemCallStackInfo.pulSystemCallStack = ( uint32_t * ) ( ( uint32_t ) ( xMPUSettings->xSystemCallStackInfo.pulSystemCallStack ) &
@@ -311,7 +364,7 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
     /* This is not NULL only for the duration of a system call. */
     xMPUSettings->xSystemCallStackInfo.pulTaskStack = NULL;
 
-    return &( xMPUSettings->ulContext[ 19 ] );
+    return &( xMPUSettings->ulContext[ ulIndex] );
 }
 
 /* ----------------------------------------------------------------------------------- */

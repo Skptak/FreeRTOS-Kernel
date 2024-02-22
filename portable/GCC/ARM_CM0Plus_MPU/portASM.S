@@ -145,6 +145,39 @@ portRESTORE_CONTEXT:
 
     /*---------- Restore Context. ---------- */
     /* R3 = = &pxCurrentTCB */
+    LDR     R2, =pxCurrentTCB
+    /* r0 = pxCurrentTCB. */
+    LDR     r0, [r2]
+    /* The first item in pxCurrentTCB is the location of the task context. */
+    LDR     r1, [r0]
+
+    subs r1, #0xC
+    ldmia r1!, {r2-r4}                  /* r2 = original PSP, r3 = CONTROL, r4 = LR. */
+    subs r1, #0xC
+
+    msr psp, r2
+    msr control, r3
+    mov lr, r4
+
+    subs r1, #32                        /* Move to the hardware saved context */
+    ldmia r1!, {r4-r7}                  /* r4-r7 contain half of the hardware saved context. */
+    stmia r2!, {r4-r7}                  /* Copy half of the the hardware saved context on the task stack. */
+    ldmia r1!, {r4-r7}                  /* r4-r7 contain rest half of the hardware saved context. */
+    stmia r2!, {r4-r7}                  /* Copy rest half of the the hardware saved context on the task stack. */
+    subs r1, #48
+    ldmia r1!, {r4-r7}                  /* Restore r8-r11. */
+    mov r8, r4                          /* r8 = r4. */
+    mov r9, r5                          /* r9 = r5. */
+    mov r10, r6                         /* r10 = r6. */
+    mov r11, r7                         /* r11 = r7. */
+    subs r1, #32
+    ldmia r1!, {r4-r7}                  /* Restore r4-r7. */
+    subs r1, #16
+
+    str r1, [r0]                        /* Save the location where the context should be saved next as the first member of TCB. */
+    bx lr
+#if 0
+    /* R3 = = &pxCurrentTCB */
     LDR     R3, =pxCurrentTCB
     /* r2 = pxCurrentTCB. */
     LDR     R2, [r3]
@@ -180,7 +213,7 @@ portRESTORE_CONTEXT:
 
     /* Branch to the EXC_Return instruction */
     BX      R2
-
+#endif
 .endm
 
 .align 4
@@ -272,6 +305,7 @@ SVC_Handler:
 
     syscall_exit:
         mov r1, lr
+        mov R4, LR
         bl vSystemCallExit
         /* TODO: Set R2 to EXC_Return */
         LDR     R0, =#portINITIAL_EXC_RETURN
@@ -286,6 +320,31 @@ SVC_Handler:
 .type PendSV_Handler, %function
 PendSV_Handler:
     /*------------ Save Context. ----------- */
+    ldr r2, =pxCurrentTCB                   /* Read the location of pxCurrentTCB i.e. &( pxCurrentTCB ). */
+    ldr r0, [r2]                            /* r0 = pxCurrentTCB. */
+    ldr r1, [r0]                            /* r1 = Location in TCB where the context should be saved. */
+    mrs r2, psp                             /* r2 = PSP. */
+
+    save_general_regs:
+        stmia r1!, {r4-r7}                  /* Store r4-r7. */
+        mov r4, r8                          /* r4 = r8. */
+        mov r5, r9                          /* r5 = r9. */
+        mov r6, r10                         /* r6 = r10. */
+        mov r7, r11                         /* r7 = r11. */
+        stmia r1!, {r4-r7}                  /* Store r8-r11. */
+        ldmia r2!, {r4-r7}                  /* Copy half of the  hardware saved context into r4-r7. */
+        stmia r1!, {r4-r7}                  /* Store the hardware saved context. */
+        ldmia r2!, {r4-r7}                  /* Copy rest half of txhe  hardware saved context into r4-r7. */
+        stmia r1!, {r4-r7}                  /* Store the hardware saved context. */
+
+    save_special_regs:
+        mrs r2, psp                         /* r2 = PSP. */
+        mrs r3, control                     /* r3 = CONTROL. */
+        mov r4, lr                          /* r4 = LR. */
+        stmia r1!, {r2-r4}                  /* Store original PSP (after hardware has saved context), PSPLIM, CONTROL and LR. */
+        str r1, [r0]                        /* Save the location from where the context should be restored as the first member of TCB. */
+
+    #if 0
     /* R3 = = &pxCurrentTCB */
     LDR     R3, =pxCurrentTCB
     /* r2 = pxCurrentTCB. */
@@ -331,7 +390,7 @@ PendSV_Handler:
 
     /* Store the last two hardware saved registers to ulContext */
     STMIA   R0!, { R2-R3 }
-
+#endif
     /*---------- Select next task. --------- */
     //push   {r3, r14}
     cpsid  i
