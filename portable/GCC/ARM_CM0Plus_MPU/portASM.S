@@ -127,11 +127,12 @@ portRESTORE_CONTEXT:
     /* MPU_CTRL register. */
     ldr   r1, =0xe000ed94
     /* Read the value of MPU_CTRL. */
-    ldr   r3, [r1]
-    /* r3 = r3 | 1 i.e. Set the bit 0 in r3. */
-    orrs  r3, r3, r1
+    ldr     r2, [r1]
+    movs    r3, #0x1
+    /* r2 = r2 & ~1 i.e. Clear the bit 0 in r2. */
+    orrs    r2, r2, r3
     /* Enable MPU. */
-    str   r3, [r1]
+    str     r2, [r1]
     /* Force memory writes before continuing. */
     dsb
 
