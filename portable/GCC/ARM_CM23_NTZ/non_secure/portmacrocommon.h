@@ -144,14 +144,15 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 #endif
 
 /* MPU regions. */
-#define portPRIVILEGED_FLASH_REGION                   ( 0UL )
-#define portUNPRIVILEGED_FLASH_REGION                 ( 1UL )
-#define portUNPRIVILEGED_SYSCALLS_REGION              ( 2UL )
-#define portPRIVILEGED_RAM_REGION                     ( 3UL )
 #define portSTACK_REGION                              ( 4UL )
-#define portFIRST_CONFIGURABLE_REGION                 ( 5UL )
+#define portUNPRIVILEGED_FLASH_REGION                 ( 5UL )
+#define portPRIVILEGED_FLASH_REGION                   ( 6UL )
+#define portPRIVILEGED_RAM_REGION                     ( 7UL )
+#define portFIRST_CONFIGURABLE_REGION                 ( 0UL )
+#define portLAST_CONFIGURABLE_REGION                  ( 3UL )
 #define portLAST_CONFIGURABLE_REGION                  ( configTOTAL_MPU_REGIONS - 1UL )
 #define portNUM_CONFIGURABLE_REGIONS                  ( ( portLAST_CONFIGURABLE_REGION - portFIRST_CONFIGURABLE_REGION ) + 1 )
+#define portTOTAL_NUM_REGIONS_IN_TCB                  ( portNUM_CONFIGURABLE_REGIONS + 1 )     /* Plus one to make space for the stack region. */
 #define portTOTAL_NUM_REGIONS                         ( portNUM_CONFIGURABLE_REGIONS + 1 )       /* Plus one to make space for the stack region. */
 
 /* Device memory attributes used in MPU_MAIR registers.
@@ -174,28 +175,88 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 #define portMPU_NORMAL_MEMORY_BUFFERABLE_CACHEABLE    ( 0xFF )       /* Non-Transient, Write-back, Read-Allocate and Write-Allocate. */
 
 /* Attributes used in MPU_RBAR registers. */
-#define portMPU_REGION_NON_SHAREABLE                  ( 0UL << 3UL )
-#define portMPU_REGION_INNER_SHAREABLE                ( 1UL << 3UL )
-#define portMPU_REGION_OUTER_SHAREABLE                ( 2UL << 3UL )
+#define portMPU_REGION_READ_WRITE                                ( 0x03UL << 24UL )
+#define portMPU_REGION_PRIVILEGED_READ_ONLY                      ( 0x05UL << 24UL )
+#define portMPU_REGION_READ_ONLY                                 ( 0x06UL << 24UL )
+#define portMPU_REGION_PRIVILEGED_READ_WRITE                     ( 0x01UL << 24UL )
+#define portMPU_REGION_PRIVILEGED_READ_WRITE_UNPRIV_READ_ONLY    ( 0x02UL << 24UL )
+#define portMPU_REGION_CACHEABLE_BUFFERABLE                      ( 0x07UL << 16UL )
+#define portMPU_REGION_EXECUTE_NEVER                             ( 0x01UL << 28UL )
 
-#define portMPU_REGION_PRIVILEGED_READ_WRITE          ( 0UL << 1UL )
-#define portMPU_REGION_READ_WRITE                     ( 1UL << 1UL )
-#define portMPU_REGION_PRIVILEGED_READ_ONLY           ( 2UL << 1UL )
-#define portMPU_REGION_READ_ONLY                      ( 3UL << 1UL )
 
 #define portMPU_REGION_EXECUTE_NEVER                  ( 1UL )
+
+
+/* Constants required to access and manipulate the MPU. */
+#define portMPU_TYPE_REG                          ( *( ( volatile uint32_t * ) 0xE000ED90 ) )
+#define portMPU_REGION_BASE_ADDRESS_REG           ( *( ( volatile uint32_t * ) 0xE000ED9C ) )
+#define portMPU_REGION_ATTRIBUTE_REG              ( *( ( volatile uint32_t * ) 0xE000EDA0 ) )
+#define portMPU_CTRL_REG                          ( *( ( volatile uint32_t * ) 0xE000ED94 ) )
+#define portEXPECTED_MPU_TYPE_VALUE               ( configTOTAL_MPU_REGIONS << 8UL )
+#define portMPU_ENABLE                            ( 0x01UL )
+#define portMPU_BACKGROUND_ENABLE                 ( 1UL << 2UL )
+#define portPRIVILEGED_EXECUTION_START_ADDRESS    ( 0UL )
+#define portMPU_REGION_VALID                      ( 0x10UL )
+#define portMPU_REGION_ENABLE                     ( 0x01UL )
+#define portPERIPHERALS_START_ADDRESS             0x40000000UL
+#define portPERIPHERALS_END_ADDRESS               0x5FFFFFFFUL
+
+#define portMPU_RASR_TEX_S_C_B_MASK 0x3FUL
+#define portMPU_RASR_TEX_S_C_B_LOCATION 16U
+#define portNVIC_MEM_FAULT_ENABLE                 ( 1UL << 16UL )
+
+
+/* Constants required to access and manipulate the SysTick. */
+#define portNVIC_SYSTICK_CLK_BIT              ( 1UL << 2UL )
+#define portNVIC_SYSTICK_INT_BIT              ( 1UL << 1UL )
+#define portNVIC_SYSTICK_ENABLE_BIT           ( 1UL << 0UL )
+#define portNVIC_SYSTICK_COUNT_FLAG_BIT       ( 1UL << 16UL )
+#define portNVIC_PEND_SYSTICK_SET_BIT         ( 1UL << 26UL )
+#define portNVIC_PEND_SYSTICK_CLEAR_BIT       ( 1UL << 25UL )
+#define portMIN_INTERRUPT_PRIORITY            ( 255UL )
+#define portNVIC_PENDSV_PRI                   ( portMIN_INTERRUPT_PRIORITY << 16UL )
+#define portNVIC_SYSTICK_PRI                  ( portMIN_INTERRUPT_PRIORITY << 24UL )
+
+#define portNVIC_SYSTICK_INT                      ( 0x00000002UL )
+#define portNVIC_SYSTICK_ENABLE                   ( 0x00000001UL )
+#define portNVIC_SVC_PRI                          ( ( ( uint32_t ) configMAX_SYSCALL_INTERRUPT_PRIORITY - 1UL ) << 24UL )
+#define portNVIC_SYSTICK_PRI                  ( portMIN_INTERRUPT_PRIORITY << 24UL )
+
+#define portNVIC_PENDSVSET_BIT                ( 1UL << 28UL )
+#define portNVIC_PEND_SYSTICK_SET_BIT         ( 1UL << 26UL )
+#define portNVIC_PEND_SYSTICK_CLEAR_BIT       ( 1UL << 25UL )
+#define portMIN_INTERRUPT_PRIORITY            ( 255UL )
+#define portNVIC_PENDSV_PRI                   ( portMIN_INTERRUPT_PRIORITY << 16UL )
+#define portNVIC_SHPR2_REG                 ( *( ( volatile uint32_t * ) 0xE000ED1C ) )
+#define portNVIC_SYS_CTRL_STATE_REG               ( *( ( volatile uint32_t * ) 0xe000ed24 ) )
+
+/* Constants used to check the installation of the FreeRTOS interrupt handlers. */
+#define portSCB_VTOR_REG                      ( *( ( portISR_t ** ) 0xe000ed08 ) )
+#define portVECTOR_INDEX_PENDSV               ( 14 )
+
+/* The systick is a 24-bit counter. */
+#define portMAX_24_BIT_NUMBER                 ( 0xffffffUL )
+
 /*-----------------------------------------------------------*/
 
 #if ( configENABLE_MPU == 1 )
 
-/**
- * @brief Settings to define an MPU region.
- */
-    typedef struct MPURegionSettings
+    /**
+     * @brief Settings to define an MPU region.
+     */
+    typedef struct MPU_REGION_REGISTERS
     {
-        uint32_t ulRBAR; /**< RBAR for the region. */
-        uint32_t ulRLAR; /**< RLAR for the region. */
-    } MPURegionSettings_t;
+        uint32_t ulRegionBaseAddress;
+        uint32_t ulRegionAttribute;
+    } xMPU_REGION_REGISTERS;
+
+    typedef struct MPU_REGION_SETTINGS
+    {
+        uint32_t ulRegionStartAddress;
+        uint32_t ulRegionEndAddress;
+        uint32_t ulRegionPermissions;
+    } xMPU_REGION_SETTINGS;
+
 
     #if ( configUSE_MPU_WRAPPERS_V1 == 0 )
 
@@ -203,17 +264,15 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
             #error configSYSTEM_CALL_STACK_SIZE must be defined to the desired size of the system call stack in words for using MPU wrappers v2.
         #endif
 
-/**
- * @brief System call stack.
- */
+        /**
+         * @brief System call stack.
+         */
         typedef struct SYSTEM_CALL_STACK_INFO
         {
-            uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ];
             uint32_t * pulSystemCallStack;
-            uint32_t * pulSystemCallStackLimit;
             uint32_t * pulTaskStack;
             uint32_t ulLinkRegisterAtSystemCallEntry;
-            uint32_t ulStackLimitRegisterAtSystemCallEntry;
+            uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ];
         } xSYSTEM_CALL_STACK_INFO;
 
     #endif /* configUSE_MPU_WRAPPERS_V1 == 0 */
@@ -292,8 +351,8 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 
     typedef struct MPU_SETTINGS
     {
-        uint32_t ulMAIR0;                                              /**< MAIR0 for the task containing attributes for all the 4 per task regions. */
-        MPURegionSettings_t xRegionsSettings[ portTOTAL_NUM_REGIONS ]; /**< Settings for 4 per task regions. */
+        xMPU_REGION_REGISTERS xRegion[ portTOTAL_NUM_REGIONS_IN_TCB ];
+        xMPU_REGION_SETTINGS xRegionSettings[ portTOTAL_NUM_REGIONS_IN_TCB ];
         uint32_t ulContext[ MAX_CONTEXT_SIZE ];
         uint32_t ulTaskFlags;
 

@@ -208,7 +208,7 @@ void vRaisePrivilege( void ) /* __attribute__ (( naked )) PRIVILEGED_FUNCTION */
         "                                                   \n"
         "   mrs  r0, control                                \n" /* Read the CONTROL register. */
         "   movs r1, #1                                     \n" /* r1 = 1. */
-        "   bics r0, r1                                     \n" /* Clear the bit 0. */
+        "   bics  r0, r1                                     \n" /* Clear the bit 0. */
         "   msr  control, r0                                \n" /* Write back the new CONTROL value. */
         "   bx lr                                           \n" /* Return to the caller. */
         ::: "r0", "r1", "memory"
