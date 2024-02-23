@@ -99,6 +99,8 @@ void PendSV_Handler( void ) __attribute__( ( naked ) );
 #define portMPU_REGION_READ_ONLY                                 ( 0x6UL << 24UL )
 #define portMPU_REGION_PRIVILEGED_READ_WRITE                     ( 0x1UL << 24UL )
 #define portMPU_REGION_PRIVILEGED_READ_WRITE_UNPRIV_READ_ONLY    ( 0x2UL << 24UL )
+#define portMPU_REGION_STRONGLY_ORDERED                          ( 0x0UL << 16UL )
+#define portMPU_REGION_DEVICE_MEMORY                             ( 0x1UL << 16UL )
 #define portMPU_REGION_CACHEABLE_BUFFERABLE                      ( 0x7UL << 16UL )
 #define portMPU_REGION_EXECUTE_NEVER                             ( 0x1UL << 28UL )
 
