@@ -41,9 +41,6 @@
 #include "portmacro.h"
 #include "mpu_syscall_numbers.h"
 
-#ifndef __VFP_FP__
-    //#error This port can only be used when the project options are configured to enable hardware floating point support.
-#endif
 
 #undef MPU_WRAPPERS_INCLUDED_FROM_API_FILE
 
@@ -55,7 +52,7 @@
 
 /* The way the SysTick is clocked is not modified in case it is not the same
  * as the core. */
-    #define portNVIC_SYSTICK_CLK    ( 0 )
+    #define portNVIC_SYSTICK_CLK    ( 0U )
 #endif
 
 #if ( configALLOW_UNPRIVILEGED_CRITICAL_SECTIONS == 1)
@@ -69,8 +66,7 @@
 #elif ( configTOTAL_MPU_REGIONS != 8U )
 	#error "The Cortex-M0+ Only supports 8 MPU regions"
 #endif /* configTOTAL_MPU_REGIONS */
-/* Constants used to detect Cortex-M7 r0p0 and r0p1 cores, and ensure
- * that a work around is active for errata 837070. */
+
 #define portCPUID                                 ( *( ( volatile uint32_t * ) 0xE000ED00 ) )
 
 /* Constants required to access and manipulate the MPU. */
@@ -407,7 +403,6 @@ void vSystemCallEnter(  uint32_t * pulTaskStack,
 
     ulSystemCallLocation = pulTaskStack[ portOFFSET_TO_PC ];
     pxMpuSettings = xTaskGetMPUSettings( pxCurrentTCB );
-    //configASSERT(uxSystemCallImplementations[ SYSTEM_CALL_vTaskDelay ] == MPU_vTaskDelayImpl );
 
     /* Checks:
         * 1. SVC is raised from the system call section (i.e. application is
