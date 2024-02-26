@@ -105,13 +105,12 @@ ulPortCountLeadingZeros:
 
 .macro processorIsPrivileged
     /* Push R0 and R1 before using them */
-    PUSH    { R0 }
-    /* Load value of SPSR into R0 */
+    PUSH    { R0-R1 }
     MRS     R0, CONTROL
-    /* Check if we're in user mode */
-    CMP     R0, #0
+    MOVS    R1, #1
+    TST     R0, R1
     /* Restore the pushed register */
-    POP     { R0 }
+    POP     { R0-R1 }
 .endm
 
 /*---------------------------------------------------------------------------*/

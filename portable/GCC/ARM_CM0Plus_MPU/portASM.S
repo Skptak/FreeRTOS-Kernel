@@ -256,12 +256,9 @@ SVC_Handler:
         mrs r0, msp
 
      svc_num_load:
-        ldr r1, [r0, #24]
-        subs r1, r1, #2
-        ldr r1, [r1]
-        /* Highest possible SVC on the M0+ is SVC #0xFF */
-        MOVS    R2, #0XFF
-        ANDS    R1, R1, R2
+        ldr r2, [r0, #24]
+        subs r2, #2
+        ldrb r1, [r2, #0]
         ldr r2, =#NUM_SYSTEM_CALLS
         cmp r1, r2
         blt syscall_enter
