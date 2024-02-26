@@ -64,94 +64,87 @@ portRESTORE_CONTEXT:
 
     /* ------------ Program MPU. ------------ */
     /* r3 = &pxCurrentTCB. */
-    ldr       r3, =pxCurrentTCB
+    ldr     r3, =pxCurrentTCB
     /* r0 = pxCurrentTCB. */
-    ldr       r0, [r3]
+    ldr     r0, [r3]
     /* r2 = Second item in the TCB which is xMPUSettings. */
-    adds      r0, #4
+    adds    r0, #4
 
-    /* Complete outstanding transfers before disabling MPU. */
-    dmb
-    /* MPU_CTRL register. */
-    ldr     r1, =0xe000ed94
-    /* Read the value of MPU_CTRL. */
-    ldr     r2, [r1]
-    movs    r3, #0x1
-    /* r2 = r2 & ~1 i.e. Clear the bit 0 in r2. */
-    bics    r2, r2, r3
+
+    dmb     /* Complete outstanding transfers before disabling MPU. */
+
+    ldr     r1, =0xe000ed94     /* MPU_CTRL register. */
+    ldr     r2, [r1]            /* Read the value of MPU_CTRL. */
+    movs    r3, #0x1            /* Set the enable bit of MPU_CTRL high */
+    bics    r2, r2, r3          /* r2 = r2 & ~1 i.e. Clear the bit 0 in r2. */
     /* Disable MPU. */
     str     r2, [r1]
 
-
     /* Region Base Address register. */
-    ldr   r1, =0xe000ed98   /* r1 = 0xe000ed98 [Location of RNR] */
-    ldr	  r2, =0xe000ed9c   /* r2 = 0xe000ed9c [Location of RBAR]. */
-    ldr   r3, =0xe000eda0   /* r3 = 0xe000eda0 [Location of RASR]. */
+    ldr     r1, =0xe000ed98     /* r1 = 0xe000ed98 [Location of RNR] */
+    ldr	    r2, =0xe000ed9c     /* r2 = 0xe000ed9c [Location of RBAR]. */
+    ldr     r3, =0xe000eda0     /* r3 = 0xe000eda0 [Location of RASR]. */
 
-    ldmia r0!, {r5-r6}      /* Read first set of RBAR/RASR registers from TCB. */
-    str r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
-    str r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
+    ldmia   r0!, {r5-r6}        /* Read first set of RBAR/RASR registers from TCB. */
+    str     r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
+    str     r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
 
-    ldmia r0!, {r5-r6}      /* Read second set of RBAR/RASR registers from TCB. */
-    str r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
-    str r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
+    ldmia   r0!, {r5-r6}        /* Read second set of RBAR/RASR registers from TCB. */
+    str     r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
+    str     r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
 
-    ldmia r0!, {r5-r6}      /* Read third set of RBAR/RASR registers from TCB. */
-    str r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
-    str r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
+    ldmia   r0!, {r5-r6}        /* Read third set of RBAR/RASR registers from TCB. */
+    str     r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
+    str     r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
 
-    ldmia r0!, {r5-r6}      /* Read fourth set of RBAR/RASR registers from TCB. */
-    str r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
-    str r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
+    ldmia   r0!, {r5-r6}        /* Read fourth set of RBAR/RASR registers from TCB. */
+    str     r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
+    str     r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
 
-    ldmia r0!, {r5-r6}      /* Read fifth set of RBAR/RASR registers from TCB. */
-    str r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
-    str r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
+    ldmia   r0!, {r5-r6}        /* Read fifth set of RBAR/RASR registers from TCB. */
+    str     r5, [r2]            /* r2 = 0xe000ed9c [Location of RBAR]. */
+    str     r6, [r3]            /* r3 = 0xe000eda0 [Location of RASR]. */
 
-    /* MPU_CTRL register. */
-    ldr   r1, =0xe000ed94
-    /* Read the value of MPU_CTRL. */
-    ldr     r2, [r1]
+
+    ldr     r1, =0xe000ed94     /* MPU_CTRL register. */
+    ldr     r2, [r1]            /* Read the value of MPU_CTRL. */
     movs    r3, #0x1
-    /* r2 = r2 & ~1 i.e. Clear the bit 0 in r2. */
-    orrs    r2, r2, r3
-    /* Enable MPU. */
-    str     r2, [r1]
-    /* Force memory writes before continuing. */
-    dsb
+    orrs    r2, r2, r3          /* r2 = r2 & ~1 i.e. Clear the bit 0 in r2. */
+    str     r2, [r1]            /* Enable MPU. */
+
+    dsb                         /* Force memory writes before continuing. */
 
     /*---------- Restore Context. ---------- */
-    /* R3 = = &pxCurrentTCB */
-    LDR     R2, =pxCurrentTCB
-    /* r0 = pxCurrentTCB. */
-    LDR     r0, [r2]
+    ldr     r2, =pxCurrentTCB   /* r2 = &pxCurrentTCB */
+    ldr     r0, [r2]            /* r0 = pxCurrentTCB. */
     /* The first item in pxCurrentTCB is the location of the task context. */
-    LDR     r1, [r0]
+    ldr     r1, [r0]
 
-    subs r1, #0xC
-    ldmia r1!, {r2-r4}                  /* r2 = original PSP, r3 = CONTROL, r4 = LR. */
-    subs r1, #0xC
+    subs    r1, #0xC
+    ldmia   r1!, {r2-r4}        /* r2 = original PSP, r3 = CONTROL, r4 = LR. */
+    subs    r1, #0xC
 
-    msr psp, r2
-    msr control, r3
-    mov lr, r4
+    msr     psp, r2
+    msr     control, r3
+    mov     lr, r4
 
-    subs r1, #32                        /* Move to the hardware saved context */
-    ldmia r1!, {r4-r7}                  /* r4-r7 contain half of the hardware saved context. */
-    stmia r2!, {r4-r7}                  /* Copy half of the the hardware saved context on the task stack. */
-    ldmia r1!, {r4-r7}                  /* r4-r7 contain rest half of the hardware saved context. */
-    stmia r2!, {r4-r7}                  /* Copy rest half of the the hardware saved context on the task stack. */
-    subs r1, #48
-    ldmia r1!, {r4-r7}                  /* Restore r8-r11. */
-    mov r8, r4                          /* r8 = r4. */
-    mov r9, r5                          /* r9 = r5. */
-    mov r10, r6                         /* r10 = r6. */
-    mov r11, r7                         /* r11 = r7. */
-    subs r1, #32
-    ldmia r1!, {r4-r7}                  /* Restore r4-r7. */
-    subs r1, #16
+    subs    r1, #32             /* Move to the hardware saved context */
+    ldmia   r1!, {r4-r7}        /* r4-r7 contain half of the hardware saved context. */
+    stmia   r2!, {r4-r7}        /* Copy half of the the hardware saved context on the task stack. */
+    ldmia   r1!, {r4-r7}        /* r4-r7 contain rest half of the hardware saved context. */
+    stmia   r2!, {r4-r7}        /* Copy rest half of the the hardware saved context on the task stack. */
+    subs    r1, #48
+    ldmia   r1!, {r4-r7}        /* Restore r8-r11. */
+    mov     r8, r4              /* r8 = r4. */
+    mov     r9, r5              /* r9 = r5. */
+    mov     r10, r6             /* r10 = r6. */
+    mov     r11, r7             /* r11 = r7. */
+    subs    r1, #32
+    ldmia   r1!, {r4-r7}        /* Restore r4-r7. */
+    subs    r1, #16
 
-    str r1, [r0]                        /* Save the location where the context should be saved next as the first member of TCB. */
+    /* Save the location where the context should be saved next as the first member of TCB. */
+    str r1, [r0]
     bx lr
 
 .endm
@@ -193,27 +186,27 @@ vPortStartFirstTask:
 .global SVC_Handler
 .type SVC_Handler, %function
 SVC_Handler:
-    MOVS r0, #0x4
-    mov r1, lr
-    tst r1, r0
-    beq load_msp
-    mrs r0, psp
-    b svc_num_load
+    movs    r0, #0x4
+    mov     r1, lr
+    tst     r1, r0
+    beq     load_msp
+    mrs     r0, psp
+    b       svc_num_load
     load_msp:
-        mrs r0, msp
+        mrs     r0, msp
 
      svc_num_load:
-        ldr r2, [r0, #24]
-        subs r2, #2
-        ldrb r1, [r2, #0]
-        ldr r2, =#NUM_SYSTEM_CALLS
-        cmp r1, r2
+        ldr     r2, [r0, #24]
+        subs    r2, #2
+        ldrb    r1, [r2, #0]
+        ldr     r2, =#NUM_SYSTEM_CALLS
+        cmp     r1, r2
         blt syscall_enter
 
         /* System Call Exit SVC */
-        ldr  r2, =#portSVC_SYSTEM_CALL_EXIT
-        cmp r1, r2
-        beq syscall_exit
+        ldr     r2, =#portSVC_SYSTEM_CALL_EXIT
+        cmp     r1, r2
+        beq     syscall_exit
 
         /* Start the first task */
         ldr     R2, =#portSVC_START_SCHEDULER
@@ -222,26 +215,27 @@ SVC_Handler:
 
         /* Handle a pending SVC */
         /* Last case, the SVC yield */
-        //LDR     r3, =#portSVC_YIELD
-        //CMP     r2, r3
-        LDR     r3, =#0xe000ed04
-        MOVS     r2, #1
-        LSLS    r2, #28
-        STR     r3, [r2]
-        BLX     LR
+        ldr     r2, =#portSVC_YIELD
+        cmp     r1, r2
+        bne     svcHandler_Exit
+        ldr     r3, =#0xe000ed04
+        movs    r2, #1
+        lsls    r2, #28
+        str     r3, [r2]
+        svcHandler_Exit:
+            blx     LR
 
 
     syscall_enter:
-        PUSH	{ LR }
-        bl vSystemCallEnter
-        POP		{ PC }
+        push	{ LR }
+        bl      vSystemCallEnter
+        pop		{ PC }
 
 
     syscall_exit:
-        PUSH	{ LR }
-        bl vSystemCallExit
-		POP		{ PC }
-
+        push	{ LR }
+        bl      vSystemCallExit
+		pop		{ PC }
 
     start_first_task:
         portRESTORE_CONTEXT
@@ -251,32 +245,33 @@ SVC_Handler:
 .type PendSV_Handler, %function
 PendSV_Handler:
     /*------------ Save Context. ----------- */
-    ldr r2, =pxCurrentTCB                   /* Read the location of pxCurrentTCB i.e. &( pxCurrentTCB ). */
-    ldr r0, [r2]                            /* r0 = pxCurrentTCB. */
-    ldr r1, [r0]                            /* r1 = Location in TCB where the context should be saved. */
-    mrs r2, psp                             /* r2 = PSP. */
+    ldr     r2, =pxCurrentTCB       /* Read the location of pxCurrentTCB i.e. &( pxCurrentTCB ). */
+    ldr     r0, [r2]                /* r0 = pxCurrentTCB. */
+    ldr     r1, [r0]                /* r1 = Location in TCB where the context should be saved. */
+    mrs     r2, psp                 /* r2 = PSP. */
 
     save_general_regs:
-        stmia r1!, {r4-r7}                  /* Store r4-r7. */
-        mov r4, r8                          /* r4 = r8. */
-        mov r5, r9                          /* r5 = r9. */
-        mov r6, r10                         /* r6 = r10. */
-        mov r7, r11                         /* r7 = r11. */
-        stmia r1!, {r4-r7}                  /* Store r8-r11. */
-        ldmia r2!, {r4-r7}                  /* Copy half of the  hardware saved context into r4-r7. */
-        stmia r1!, {r4-r7}                  /* Store the hardware saved context. */
-        ldmia r2!, {r4-r7}                  /* Copy rest half of txhe  hardware saved context into r4-r7. */
-        stmia r1!, {r4-r7}                  /* Store the hardware saved context. */
+        stmia r1!, {r4-r7}          /* Store r4-r7. */
+        mov r4, r8                  /* r4 = r8. */
+        mov r5, r9                  /* r5 = r9. */
+        mov r6, r10                 /* r6 = r10. */
+        mov r7, r11                 /* r7 = r11. */
+        stmia r1!, {r4-r7}          /* Store r8-r11. */
+        ldmia r2!, {r4-r7}          /* Copy half of the  hardware saved context into r4-r7. */
+        stmia r1!, {r4-r7}          /* Store the hardware saved context. */
+        ldmia r2!, {r4-r7}          /* Copy rest half of txhe  hardware saved context into r4-r7. */
+        stmia r1!, {r4-r7}          /* Store the hardware saved context. */
 
     save_special_regs:
-        mrs r2, psp                         /* r2 = PSP. */
-        mrs r3, control                     /* r3 = CONTROL. */
-        mov r4, lr                          /* r4 = LR. */
-        stmia r1!, {r2-r4}                  /* Store original PSP (after hardware has saved context), PSPLIM, CONTROL and LR. */
-        str r1, [r0]                        /* Save the location from where the context should be restored as the first member of TCB. */
+        mrs r2, psp                 /* r2 = PSP. */
+        mrs r3, control             /* r3 = CONTROL. */
+        mov r4, lr                  /* r4 = LR. */
+        stmia r1!, {r2-r4}          /* Store original PSP (after hardware has saved context), PSPLIM, CONTROL and LR. */
+
+        /* Save the location from where the context should be restored as the first member of TCB. */
+        str r1, [r0]
 
     /*---------- Select next task. --------- */
-    //push   {r3, r14}
     cpsid  i
     blx     vTaskSwitchContext
     cpsie  i
