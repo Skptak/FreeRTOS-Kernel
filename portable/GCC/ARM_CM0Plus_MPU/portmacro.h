@@ -49,17 +49,17 @@
  */
 
 /* Type definitions. */
-#define portCHAR          char
-#define portFLOAT         float
-#define portDOUBLE        int64_t
-#define portLONG          int32_t
-#define portSHORT         int8_t
-#define portSTACK_TYPE    uint32_t
-#define portBASE_TYPE     int32_t
+#define portCHAR        char
+#define portFLOAT       float
+#define portDOUBLE      double
+#define portLONG        long
+#define portSHORT       short
+#define portSTACK_TYPE  uint32_t
+#define portBASE_TYPE   int32_t
 
-typedef portSTACK_TYPE   StackType_t;
+typedef portSTACK_TYPE  StackType_t;
 typedef int32_t         BaseType_t;
-typedef uint32_t   		 UBaseType_t;
+typedef uint32_t        UBaseType_t;
 
 #if ( configTICK_TYPE_WIDTH_IN_BITS == TICK_TYPE_WIDTH_16_BITS )
     typedef uint16_t     TickType_t;
@@ -81,7 +81,7 @@ typedef void ( * portISR_t )( void );
 /*
  * Starts the scheduler by restoring the context of the first task to run.
  */
-void vPortStartFirstTask( void ) __attribute__( ( naked ) );
+void vPortStartFirstTask( void );
 void SVC_Handler( void ) __attribute__( ( naked ) );
 void PendSV_Handler( void ) __attribute__( ( naked ) );
 
@@ -104,14 +104,15 @@ void PendSV_Handler( void ) __attribute__( ( naked ) );
 #define portMPU_REGION_CACHEABLE_BUFFERABLE                      ( 0x7UL << 16UL )
 #define portMPU_REGION_EXECUTE_NEVER                             ( 0x1UL << 28UL )
 
-#define portSTACK_REGION                                         ( 4UL )
-#define portUNPRIVILEGED_FLASH_REGION                            ( 5UL )
-#define portPRIVILEGED_FLASH_REGION                              ( 6UL )
-#define portPRIVILEGED_RAM_REGION                                ( 7UL )
-#define portFIRST_CONFIGURABLE_REGION                            ( 0UL )
-#define portLAST_CONFIGURABLE_REGION                             ( 3UL )
-#define portNUM_CONFIGURABLE_REGIONS                             ( ( portLAST_CONFIGURABLE_REGION - portFIRST_CONFIGURABLE_REGION ) + 1 )
-#define portTOTAL_NUM_REGIONS_IN_TCB                             ( portNUM_CONFIGURABLE_REGIONS + 1 )     /* Plus one to make space for the stack region. */
+#define portPRIVILEGED_RAM_REGION                   ( 7UL )
+#define portPRIVILEGED_FLASH_REGION                 ( 6UL )
+#define portUNPRIVILEGED_FLASH_REGION               ( 5UL )
+#define portSTACK_REGION                            ( 4UL )
+#define portLAST_CONFIGURABLE_REGION                ( 3UL )
+#define portFIRST_CONFIGURABLE_REGION               ( 0UL )
+#define portNUM_CONFIGURABLE_REGIONS                ( ( portLAST_CONFIGURABLE_REGION - portFIRST_CONFIGURABLE_REGION ) + 1 )
+/* Plus one to make space for the stack region. */
+#define portTOTAL_NUM_REGIONS_IN_TCB                ( portNUM_CONFIGURABLE_REGIONS + 1 )
 
 typedef struct MPU_REGION_REGISTERS
 {

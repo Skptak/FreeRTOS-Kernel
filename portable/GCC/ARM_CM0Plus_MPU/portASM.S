@@ -29,29 +29,16 @@
     .thumb
     .cpu cortex-m0plus
     .syntax unified
+
     /* All code in the portASM.S file is intended to be run from a prvileged
      * operating mode, as such mark the entire file as privileged_functions */
     .section privileged_functions
 
     /* External FreeRTOS-Kernel Variables */
     .extern pxCurrentTCB
-    .extern uxSystemCallImplementations
-    .extern ulPortInterruptNesting
-    .extern ulPortYieldRequired
-
-    /* External Linker script variables that are needed by the port */
-    .extern __privileged_functions_start__
-    .extern __privileged_functions_end__
-    .extern __privileged_stacks_start__
-    .extern __privileged_stacks_end__
-    .extern __syscalls_flash_length__
-    .extern __syscalls_flash_start__
-    .extern __syscalls_flash_end__
 
     /* External FreeRTOS-Kernel Functions */
-    .extern vAssertCalled
     .extern vTaskSwitchContext
-    .extern vApplicationIRQHandler
 
     .extern vSVCHandler_C
     .extern vSystemCallEnter
@@ -62,11 +49,8 @@
     #define portSVC_YIELD                  101
     #define portSVC_SYSTEM_CALL_EXIT       104
 
-    #define portINITIAL_EXC_RETURN      0xfffffffdUL
+    #include "mpu_syscall_numbers.h"
 
-    #define FREERTOS_ASSEMBLY
-        #include "mpu_syscall_numbers.h"
-    #undef FREERTOS_ASSEMBLY
 /* ----------------------------------------------------------------------------------- */
 /*
 .align 4
@@ -100,7 +84,7 @@ portRESTORE_CONTEXT:
 
 
     /* Region Base Address register. */
-    ldr   r1, =0xE000ED98   /* r1 = 0xE000ED98 [Location of RNR] */
+    ldr   r1, =0xe000ed98   /* r1 = 0xe000ed98 [Location of RNR] */
     ldr	  r2, =0xe000ed9c   /* r2 = 0xe000ed9c [Location of RBAR]. */
     ldr   r3, =0xe000eda0   /* r3 = 0xe000eda0 [Location of RASR]. */
 
