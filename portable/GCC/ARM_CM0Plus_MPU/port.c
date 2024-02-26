@@ -331,27 +331,6 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
     xMPUSettings->ulContext[ ulIndex ] = portINITIAL_EXC_RETURN; /* LR (EXC_RETURN). */
     ulIndex++;
 
-#if 0
-
-    xMPUSettings->ulContext[ 5 ] = portINITIAL_EXC_RETURN;              /* EXC_RETURN. */
-    xMPUSettings->ulContext[ 6 ] = ( uint32_t ) ( pxTopOfStack - 8 );  /* PSP with the hardware saved stack. */
-	xMPUSettings->ulContext[ 7 ] = 0x04040404;  /* r4. */
-    xMPUSettings->ulContext[ 8 ] = 0x05050505;  /* r5. */
-    xMPUSettings->ulContext[ 9 ] = 0x06060606;  /* r6. */
-    xMPUSettings->ulContext[ 10 ] = 0x07070707; /* r7. */
-
-    /* Auto-Pushed Registers */
-    xMPUSettings->ulContext[ 11 ] = ( uint32_t ) pvParameters;                        /* r0. */
-    xMPUSettings->ulContext[ 12 ] = 0x01010101;                                       /* r1. */
-    xMPUSettings->ulContext[ 13 ] = 0x02020202;                                       /* r2. */
-    xMPUSettings->ulContext[ 14 ] = 0x03030303;                                       /* r3. */
-    xMPUSettings->ulContext[ 15 ] = 0x12121212;                                       /* r12. */
-    xMPUSettings->ulContext[ 16 ] = ( uint32_t ) prvTaskExitError;                    /* LR. */
-    xMPUSettings->ulContext[ 17 ] = ( ( uint32_t ) pxCode ) & portSTART_ADDRESS_MASK; /* PC. */
-    xMPUSettings->ulContext[ 18 ] = portINITIAL_XPSR;                                 /* xPSR. */
-
-#endif
-
     /* Ensure that the system call stack is double word aligned. */
     xMPUSettings->xSystemCallStackInfo.pulSystemCallStack = &( xMPUSettings->xSystemCallStackInfo.ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE - 1 ] );
     xMPUSettings->xSystemCallStackInfo.pulSystemCallStack = ( uint32_t * ) ( ( uint32_t ) ( xMPUSettings->xSystemCallStackInfo.pulSystemCallStack ) &

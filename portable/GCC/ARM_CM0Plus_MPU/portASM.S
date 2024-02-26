@@ -153,44 +153,7 @@ portRESTORE_CONTEXT:
 
     str r1, [r0]                        /* Save the location where the context should be saved next as the first member of TCB. */
     bx lr
-#if 0
-    /* R3 = = &pxCurrentTCB */
-    LDR     R3, =pxCurrentTCB
-    /* r2 = pxCurrentTCB. */
-    LDR     R2, [r3]
-    /* The first item in pxCurrentTCB is the location of the task context. */
-    LDR     R0, [R2]
-       /* Move to the hardware saved context */
-    SUBS    R0, #0x48
-    /* Load R8-R11 from ulContext */
-    LDM     R0!, { R2-R5 }
 
-    /* Move high registers up */
-    MOV     R8, R2
-    MOV     R9, R3
-    MOV     R10, R4
-    MOV     R11, R5
-
-    /* Load EXEC return, the PSP from the stack, and R4-R7 */
-    LDM    R0!, { R2-R7}
-    /* Set the Program Stack Pointer (PSP) */
-    MSR     PSP, R3
-    /* Move the PSP into R1 to push to */
-    MOV     R1, R3
-
-    /* Pop the first 5 hardware-pushed registers from ulContext */
-    LDM     R0!, {R3-R7}
-    /* Store the first 5 hardware-pushed registers onto the task stack */
-    STMIA   R1!, {R3-R7}
-
-    /* Pop the next 3 hardware-pushed registers */
-    LDMIA   R0!, {R3-R5}
-    /* Store the last two hardware-pushed registers onto the task stack */
-    STMIA   R1!, {R3-R5}
-
-    /* Branch to the EXC_Return instruction */
-    BX      R2
-#endif
 .endm
 
 .align 4
