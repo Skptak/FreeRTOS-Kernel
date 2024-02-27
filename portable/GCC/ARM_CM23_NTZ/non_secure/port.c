@@ -847,94 +847,98 @@ static void prvTaskExitError( void )
 /*-----------------------------------------------------------*/
 
 #if ( configENABLE_MPU == 1 )
-    static void prvSetupMPU( void ) /* PRIVILEGED_FUNCTION */
+
+static uint32_t prvGetMPURegionSizeSetting( uint32_t ulActualSizeInBytes )
+{
+    uint32_t ulRegionSize, ulReturnValue = 4;
+
+    /* 32 is the smallest region size, 31 is the largest valid value for
+     * ulReturnValue. */
+    for( ulRegionSize = 32UL; ulReturnValue < 31UL; ( ulRegionSize <<= 1UL ) )
     {
-        #if defined( __ARMCC_VERSION )
-
-            /* Declaration when these variable are defined in code instead of being
-             * exported from linker scripts. */
-            extern uint32_t * __privileged_functions_start__;
-            extern uint32_t * __privileged_functions_end__;
-            extern uint32_t * __syscalls_flash_start__;
-            extern uint32_t * __syscalls_flash_end__;
-            extern uint32_t * __unprivileged_flash_start__;
-            extern uint32_t * __unprivileged_flash_end__;
-            extern uint32_t * __privileged_sram_start__;
-            extern uint32_t * __privileged_sram_end__;
-        #else /* if defined( __ARMCC_VERSION ) */
-            /* Declaration when these variable are exported from linker scripts. */
-            extern uint32_t __privileged_functions_start__[];
-            extern uint32_t __privileged_functions_end__[];
-            extern uint32_t __syscalls_flash_start__[];
-            extern uint32_t __syscalls_flash_end__[];
-            extern uint32_t __unprivileged_flash_start__[];
-            extern uint32_t __unprivileged_flash_end__[];
-            extern uint32_t __privileged_sram_start__[];
-            extern uint32_t __privileged_sram_end__[];
-        #endif /* defined( __ARMCC_VERSION ) */
-
-        /* The only permitted number of regions are 8 or 16. */
-        configASSERT( ( configTOTAL_MPU_REGIONS == 8 ) || ( configTOTAL_MPU_REGIONS == 16 ) );
-
-        /* Ensure that the configTOTAL_MPU_REGIONS is configured correctly. */
-        configASSERT( portMPU_TYPE_REG == portEXPECTED_MPU_TYPE_VALUE );
-
-        /* Check that the MPU is present. */
-        if( portMPU_TYPE_REG == portEXPECTED_MPU_TYPE_VALUE )
+        if( ulActualSizeInBytes <= ulRegionSize )
         {
-            /* MAIR0 - Index 0. */
-            portMPU_MAIR0_REG |= ( ( portMPU_NORMAL_MEMORY_BUFFERABLE_CACHEABLE << portMPU_MAIR_ATTR0_POS ) & portMPU_MAIR_ATTR0_MASK );
-            /* MAIR0 - Index 1. */
-            portMPU_MAIR0_REG |= ( ( portMPU_DEVICE_MEMORY_nGnRE << portMPU_MAIR_ATTR1_POS ) & portMPU_MAIR_ATTR1_MASK );
-
-            /* Setup privileged flash as Read Only so that privileged tasks can
-             * read it but not modify. */
-            portMPU_RNR_REG = portPRIVILEGED_FLASH_REGION;
-            portMPU_RBAR_REG = ( ( ( uint32_t ) __privileged_functions_start__ ) & portMPU_RBAR_ADDRESS_MASK ) |
-                               ( portMPU_REGION_NON_SHAREABLE ) |
-                               ( portMPU_REGION_PRIVILEGED_READ_ONLY );
-            portMPU_RLAR_REG = ( ( ( uint32_t ) __privileged_functions_end__ ) & portMPU_RLAR_ADDRESS_MASK ) |
-                               ( portMPU_RLAR_ATTR_INDEX0 ) |
-                               ( portMPU_RLAR_REGION_ENABLE );
-
-            /* Setup unprivileged flash as Read Only by both privileged and
-             * unprivileged tasks. All tasks can read it but no-one can modify. */
-            portMPU_RNR_REG = portUNPRIVILEGED_FLASH_REGION;
-            portMPU_RBAR_REG = ( ( ( uint32_t ) __unprivileged_flash_start__ ) & portMPU_RBAR_ADDRESS_MASK ) |
-                               ( portMPU_REGION_NON_SHAREABLE ) |
-                               ( portMPU_REGION_READ_ONLY );
-            portMPU_RLAR_REG = ( ( ( uint32_t ) __unprivileged_flash_end__ ) & portMPU_RLAR_ADDRESS_MASK ) |
-                               ( portMPU_RLAR_ATTR_INDEX0 ) |
-                               ( portMPU_RLAR_REGION_ENABLE );
-
-            /* Setup unprivileged syscalls flash as Read Only by both privileged
-             * and unprivileged tasks. All tasks can read it but no-one can modify. */
-            portMPU_RNR_REG = portUNPRIVILEGED_SYSCALLS_REGION;
-            portMPU_RBAR_REG = ( ( ( uint32_t ) __syscalls_flash_start__ ) & portMPU_RBAR_ADDRESS_MASK ) |
-                               ( portMPU_REGION_NON_SHAREABLE ) |
-                               ( portMPU_REGION_READ_ONLY );
-            portMPU_RLAR_REG = ( ( ( uint32_t ) __syscalls_flash_end__ ) & portMPU_RLAR_ADDRESS_MASK ) |
-                               ( portMPU_RLAR_ATTR_INDEX0 ) |
-                               ( portMPU_RLAR_REGION_ENABLE );
-
-            /* Setup RAM containing kernel data for privileged access only. */
-            portMPU_RNR_REG = portPRIVILEGED_RAM_REGION;
-            portMPU_RBAR_REG = ( ( ( uint32_t ) __privileged_sram_start__ ) & portMPU_RBAR_ADDRESS_MASK ) |
-                               ( portMPU_REGION_NON_SHAREABLE ) |
-                               ( portMPU_REGION_PRIVILEGED_READ_WRITE ) |
-                               ( portMPU_REGION_EXECUTE_NEVER );
-            portMPU_RLAR_REG = ( ( ( uint32_t ) __privileged_sram_end__ ) & portMPU_RLAR_ADDRESS_MASK ) |
-                               ( portMPU_RLAR_ATTR_INDEX0 ) |
-                               ( portMPU_RLAR_REGION_ENABLE );
-
-            /* Enable mem fault. */
-            portSCB_SYS_HANDLER_CTRL_STATE_REG |= portSCB_MEM_FAULT_ENABLE_BIT;
-
-            /* Enable MPU with privileged background access i.e. unmapped
-             * regions have privileged access. */
-            portMPU_CTRL_REG |= ( portMPU_PRIV_BACKGROUND_ENABLE_BIT | portMPU_ENABLE_BIT );
+            break;
+        }
+        else
+        {
+            ulReturnValue++;
         }
     }
+
+    /* Shift the code by one before returning so it can be written directly
+     * into the the correct bit position of the attribute register. */
+    return( ulReturnValue << 1UL );
+}
+
+static void prvSetupMPU( void )
+{
+    #if defined( __ARMCC_VERSION )
+
+        /* Declaration when these variable are defined in code instead of being
+         * exported from linker scripts. */
+        extern uint32_t * __privileged_functions_start__;
+        extern uint32_t * __privileged_functions_end__;
+        extern uint32_t * __FLASH_segment_start__;
+        extern uint32_t * __FLASH_segment_end__;
+        extern uint32_t * __privileged_data_start__;
+        extern uint32_t * __privileged_data_end__;
+    #else
+        /* Declaration when these variable are exported from linker scripts. */
+        extern uint32_t __privileged_functions_start__[];
+        extern uint32_t __privileged_functions_end__[];
+        extern uint32_t __FLASH_segment_start__[];
+        extern uint32_t __FLASH_segment_end__[];
+        extern uint32_t __privileged_data_start__[];
+        extern uint32_t __privileged_data_end__[];
+    #endif /* if defined( __ARMCC_VERSION ) */
+
+    /* Ensure that the configTOTAL_MPU_REGIONS is configured correctly. */
+    configASSERT( portMPU_TYPE_REG == portEXPECTED_MPU_TYPE_VALUE );
+
+    /* Check the expected MPU is present. */
+    if( portMPU_TYPE_REG == portEXPECTED_MPU_TYPE_VALUE )
+    {
+        /* First setup the unprivileged flash for unprivileged read only access. */
+        portMPU_REGION_BASE_ADDRESS_REG = ( ( uint32_t ) __FLASH_segment_start__ ) | /* Base address. */
+                                          ( portMPU_REGION_VALID ) |
+                                          ( portUNPRIVILEGED_FLASH_REGION );
+
+        portMPU_REGION_ATTRIBUTE_REG = ( portMPU_REGION_READ_ONLY ) |
+                                       ( ( configTEX_S_C_B_FLASH & portMPU_RASR_TEX_S_C_B_MASK ) << portMPU_RASR_TEX_S_C_B_LOCATION ) |
+                                       ( prvGetMPURegionSizeSetting( ( uint32_t ) __FLASH_segment_end__ - ( uint32_t ) __FLASH_segment_start__ ) ) |
+                                       ( portMPU_REGION_ENABLE );
+
+        /* Setup the privileged flash for privileged only access.  This is where
+         * the kernel code is placed. */
+        portMPU_REGION_BASE_ADDRESS_REG = ( ( uint32_t ) __privileged_functions_start__ ) | /* Base address. */
+                                          ( portMPU_REGION_VALID ) |
+                                          ( portPRIVILEGED_FLASH_REGION );
+
+        portMPU_REGION_ATTRIBUTE_REG = ( portMPU_REGION_PRIVILEGED_READ_ONLY ) |
+                                       ( ( configTEX_S_C_B_FLASH & portMPU_RASR_TEX_S_C_B_MASK ) << portMPU_RASR_TEX_S_C_B_LOCATION ) |
+                                       ( prvGetMPURegionSizeSetting( ( uint32_t ) __privileged_functions_end__ - ( uint32_t ) __privileged_functions_start__ ) ) |
+                                       ( portMPU_REGION_ENABLE );
+
+        /* Setup the privileged data RAM region.  This is where the kernel data
+         * is placed. */
+        portMPU_REGION_BASE_ADDRESS_REG = ( ( uint32_t ) __privileged_data_start__ ) | /* Base address. */
+                                          ( portMPU_REGION_VALID ) |
+                                          ( portPRIVILEGED_RAM_REGION );
+
+        portMPU_REGION_ATTRIBUTE_REG = ( portMPU_REGION_PRIVILEGED_READ_WRITE ) |
+                                       ( portMPU_REGION_EXECUTE_NEVER ) |
+                                       ( ( configTEX_S_C_B_SRAM & portMPU_RASR_TEX_S_C_B_MASK ) << portMPU_RASR_TEX_S_C_B_LOCATION ) |
+                                       prvGetMPURegionSizeSetting( ( uint32_t ) __privileged_data_end__ - ( uint32_t ) __privileged_data_start__ ) |
+                                       ( portMPU_REGION_ENABLE );
+
+        /* Enable the memory fault exception. */
+        portNVIC_SYS_CTRL_STATE_REG |= portNVIC_MEM_FAULT_ENABLE;
+
+        /* Enable the MPU with the background region configured. */
+        portMPU_CTRL_REG |= ( portMPU_ENABLE | portMPU_BACKGROUND_ENABLE );
+    }
+}
 #endif /* configENABLE_MPU */
 /*-----------------------------------------------------------*/
 
@@ -1020,6 +1024,7 @@ void SysTick_Handler( void ) /* PRIVILEGED_FUNCTION */
     }
     portCLEAR_INTERRUPT_MASK_FROM_ISR( ulPreviousMask );
 }
+
 /*-----------------------------------------------------------*/
 
 void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) /* PRIVILEGED_FUNCTION portDONT_DISCARD */
@@ -1213,7 +1218,7 @@ void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) /* PRIVILEGED_FUNCTIO
             }
             #else /* if ( ( configENABLE_FPU == 1 ) || ( configENABLE_MVE == 1 ) ) */
             {
-                ulStackFrameSize = 8;
+                ulStackFrameSize = 8UL;
             }
             #endif /* configENABLE_FPU || configENABLE_MVE */
 
@@ -1226,39 +1231,37 @@ void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) /* PRIVILEGED_FUNCTIO
                 pulSystemCallStack[ i ] = pulTaskStack[ i ];
             }
 
-            /* Store the value of the Link Register before the SVC was raised.
-             * It contains the address of the caller of the System Call entry
-             * point (i.e. the caller of the MPU_<API>). We need to restore it
-             * when we exit from the system call. */
-            pxMpuSettings->xSystemCallStackInfo.ulLinkRegisterAtSystemCallEntry = pulTaskStack[ portOFFSET_TO_LR ];
-            /* Store the value of the PSPLIM register before the SVC was raised.
-             * We need to restore it when we exit from the system call. */
-            #if ( portUSE_PSPLIM_REGISTER == 1 )
-            {
-                __asm volatile ( "mrs %0, psplim" : "=r" ( pxMpuSettings->xSystemCallStackInfo.ulStackLimitRegisterAtSystemCallEntry ) );
-            }
-            #endif
-
             /* Use the pulSystemCallStack in thread mode. */
             __asm volatile ( "msr psp, %0" : : "r" ( pulSystemCallStack ) );
-            #if ( portUSE_PSPLIM_REGISTER == 1 )
-            {
-                __asm volatile ( "msr psplim, %0" : : "r" ( pxMpuSettings->xSystemCallStackInfo.pulSystemCallStackLimit ) );
-            }
-            #endif
+
+            /* Raise the privilege for the duration of the system call. */
+            __asm volatile (
+                " .syntax unified       \n"
+                " movs  r0, #1          \n"
+                " mrs   r1, control     \n" /* Obtain current control value. */
+                " bics  r1, r0          \n" /* Clear nPRIV bit. */
+                " msr   control, r1     \n" /* Write back new control value. */
+                ::: "r0", "r1", "memory"
+                );
+
+            /* Remember the location where we should copy the stack frame when we exit from
+                * the system call. */
+            pxMpuSettings->xSystemCallStackInfo.pulTaskStack = pulTaskStack + ulStackFrameSize;
+
+            /* Store the value of the Link Register before the SVC was raised.
+                * It contains the address of the caller of the System Call entry
+                * point (i.e. the caller of the MPU_<API>). We need to restore it
+                * when we exit from the system call. */
+            pxMpuSettings->xSystemCallStackInfo.ulLinkRegisterAtSystemCallEntry = pulTaskStack[ portOFFSET_TO_LR ];
 
             /* Start executing the system call upon returning from this handler. */
             pulSystemCallStack[ portOFFSET_TO_PC ] = uxSystemCallImplementations[ ucSystemCallNumber ];
             /* Raise a request to exit from the system call upon finishing the
-             * system call. */
+                * system call. */
             pulSystemCallStack[ portOFFSET_TO_LR ] = ( uint32_t ) vRequestSystemCallExit;
 
-            /* Remember the location where we should copy the stack frame when we exit from
-             * the system call. */
-            pxMpuSettings->xSystemCallStackInfo.pulTaskStack = pulTaskStack + ulStackFrameSize;
-
             /* Record if the hardware used padding to force the stack pointer
-             * to be double word aligned. */
+                * to be double word aligned. */
             if( ( pulTaskStack[ portOFFSET_TO_PSR ] & portPSR_STACK_PADDING_MASK ) == portPSR_STACK_PADDING_MASK )
             {
                 pxMpuSettings->ulTaskFlags |= portSTACK_FRAME_HAS_PADDING_FLAG;
@@ -1269,18 +1272,9 @@ void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) /* PRIVILEGED_FUNCTIO
             }
 
             /* We ensure in pxPortInitialiseStack that the system call stack is
-             * double word aligned and therefore, there is no need of padding.
-             * Clear the bit[9] of stacked xPSR. */
+                * double word aligned and therefore, there is no need of padding.
+                * Clear the bit[9] of stacked xPSR. */
             pulSystemCallStack[ portOFFSET_TO_PSR ] &= ( ~portPSR_STACK_PADDING_MASK );
-
-            /* Raise the privilege for the duration of the system call. */
-            __asm volatile (
-                " mrs r0, control     \n" /* Obtain current control value. */
-                " movs r1, #1         \n" /* r1 = 1. */
-                " bics r0, r1         \n" /* Clear nPRIV bit. */
-                " msr control, r0     \n" /* Write back new control value. */
-                ::: "r0", "r1", "memory"
-                );
         }
     }
 
@@ -1405,7 +1399,7 @@ void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) /* PRIVILEGED_FUNCTIO
             __asm volatile (
                 " mrs r0, control     \n" /* Obtain current control value. */
                 " movs r1, #1         \n" /* r1 = 1. */
-                " orrs r0, r1         \n" /* Set nPRIV bit. */
+                " orr r0, r1         \n" /* Set nPRIV bit. */
                 " msr control, r0     \n" /* Write back new control value. */
                 ::: "r0", "r1", "memory"
                 );
@@ -1486,8 +1480,6 @@ void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) /* PRIVILEGED_FUNCTIO
         #endif /* configENABLE_TRUSTZONE */
         xMPUSettings->ulContext[ ulIndex ] = ( uint32_t ) ( pxTopOfStack - 8 ); /* PSP with the hardware saved stack. */
         ulIndex++;
-        xMPUSettings->ulContext[ ulIndex ] = ( uint32_t ) pxEndOfStack;         /* PSPLIM. */
-        ulIndex++;
 
         if( xRunPrivileged == pdTRUE )
         {
@@ -1510,12 +1502,10 @@ void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) /* PRIVILEGED_FUNCTIO
             /* Ensure that the system call stack is double word aligned. */
             xMPUSettings->xSystemCallStackInfo.pulSystemCallStack = &( xMPUSettings->xSystemCallStackInfo.ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE - 1 ] );
             xMPUSettings->xSystemCallStackInfo.pulSystemCallStack = ( uint32_t * ) ( ( uint32_t ) ( xMPUSettings->xSystemCallStackInfo.pulSystemCallStack ) &
-                                                                                     ( uint32_t ) ( ~( portBYTE_ALIGNMENT_MASK ) ) );
+                                                                                        ( uint32_t ) ( ~( portBYTE_ALIGNMENT_MASK ) ) );
 
-            xMPUSettings->xSystemCallStackInfo.pulSystemCallStackLimit = &( xMPUSettings->xSystemCallStackInfo.ulSystemCallStackBuffer[ 0 ] );
-            xMPUSettings->xSystemCallStackInfo.pulSystemCallStackLimit = ( uint32_t * ) ( ( ( uint32_t ) ( xMPUSettings->xSystemCallStackInfo.pulSystemCallStackLimit ) +
-                                                                                            ( uint32_t ) ( portBYTE_ALIGNMENT - 1 ) ) &
-                                                                                          ( uint32_t ) ( ~( portBYTE_ALIGNMENT_MASK ) ) );
+            /* This is not NULL only for the duration of a system call. */
+            xMPUSettings->xSystemCallStackInfo.pulTaskStack = NULL;
 
             /* This is not NULL only for the duration of a system call. */
             xMPUSettings->xSystemCallStackInfo.pulTaskStack = NULL;
@@ -1549,12 +1539,6 @@ void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) /* PRIVILEGED_FUNCTIO
             pxTopOfStack--;
             *pxTopOfStack = ( StackType_t ) pxEndOfStack; /* Slot used to hold this task's PSPLIM value. */
 
-            #if ( configENABLE_TRUSTZONE == 1 )
-            {
-                pxTopOfStack--;
-                *pxTopOfStack = portNO_SECURE_CONTEXT; /* Slot used to hold this task's xSecureContext value. */
-            }
-            #endif /* configENABLE_TRUSTZONE */
         }
         #else /* portPRELOAD_REGISTERS */
         {
@@ -1595,12 +1579,6 @@ void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) /* PRIVILEGED_FUNCTIO
             pxTopOfStack--;
             *pxTopOfStack = ( StackType_t ) pxEndOfStack;            /* Slot used to hold this task's PSPLIM value. */
 
-            #if ( configENABLE_TRUSTZONE == 1 )
-            {
-                pxTopOfStack--;
-                *pxTopOfStack = portNO_SECURE_CONTEXT; /* Slot used to hold this task's xSecureContext value. */
-            }
-            #endif /* configENABLE_TRUSTZONE */
         }
         #endif /* portPRELOAD_REGISTERS */
 
@@ -1772,127 +1750,137 @@ void vPortEndScheduler( void ) /* PRIVILEGED_FUNCTION */
 /*-----------------------------------------------------------*/
 
 #if ( configENABLE_MPU == 1 )
-    void vPortStoreTaskMPUSettings( xMPU_SETTINGS * xMPUSettings,
-                                    const struct xMEMORY_REGION * const xRegions,
-                                    StackType_t * pxBottomOfStack,
-                                    configSTACK_DEPTH_TYPE uxStackDepth )
-    {
-        uint32_t ulRegionStartAddress, ulRegionEndAddress, ulRegionNumber;
-        int32_t lIndex = 0;
 
+    void vPortStoreTaskMPUSettings( xMPU_SETTINGS * xMPUSettings,
+                                const struct xMEMORY_REGION * const xRegions,
+                                StackType_t * pxBottomOfStack,
+                                uint32_t ulStackDepth )
+    {
         #if defined( __ARMCC_VERSION )
 
             /* Declaration when these variable are defined in code instead of being
-             * exported from linker scripts. */
-            extern uint32_t * __privileged_sram_start__;
-            extern uint32_t * __privileged_sram_end__;
+            * exported from linker scripts. */
+            extern uint32_t * __SRAM_segment_start__;
+            extern uint32_t * __SRAM_segment_end__;
+            extern uint32_t * __privileged_data_start__;
+            extern uint32_t * __privileged_data_end__;
         #else
             /* Declaration when these variable are exported from linker scripts. */
-            extern uint32_t __privileged_sram_start__[];
-            extern uint32_t __privileged_sram_end__[];
-        #endif /* defined( __ARMCC_VERSION ) */
+            extern uint32_t __SRAM_segment_start__[];
+            extern uint32_t __SRAM_segment_end__[];
+            extern uint32_t __privileged_data_start__[];
+            extern uint32_t __privileged_data_end__[];
+        #endif /* if defined( __ARMCC_VERSION ) */
 
-        /* Setup MAIR0. */
-        xMPUSettings->ulMAIR0 = ( ( portMPU_NORMAL_MEMORY_BUFFERABLE_CACHEABLE << portMPU_MAIR_ATTR0_POS ) & portMPU_MAIR_ATTR0_MASK );
-        xMPUSettings->ulMAIR0 |= ( ( portMPU_DEVICE_MEMORY_nGnRE << portMPU_MAIR_ATTR1_POS ) & portMPU_MAIR_ATTR1_MASK );
+        int32_t lIndex;
+        uint32_t ul;
 
-        /* This function is called automatically when the task is created - in
-         * which case the stack region parameters will be valid.  At all other
-         * times the stack parameters will not be valid and it is assumed that
-         * the stack region has already been configured. */
-        if( uxStackDepth > 0 )
+        if( xRegions == NULL )
         {
-            ulRegionStartAddress = ( uint32_t ) pxBottomOfStack;
-            ulRegionEndAddress = ( uint32_t ) pxBottomOfStack + ( uxStackDepth * ( configSTACK_DEPTH_TYPE ) sizeof( StackType_t ) ) - 1;
+            /* No MPU regions are specified so allow access to all RAM. */
+            xMPUSettings->xRegion[ 0 ].ulRegionBaseAddress =
+                ( ( uint32_t ) __SRAM_segment_start__ ) | /* Base address. */
+                ( portMPU_REGION_VALID ) |
+                ( portSTACK_REGION );                     /* Region number. */
 
-            /* If the stack is within the privileged SRAM, do not protect it
-             * using a separate MPU region. This is needed because privileged
-             * SRAM is already protected using an MPU region and ARMv8-M does
-             * not allow overlapping MPU regions. */
-            if( ( ulRegionStartAddress >= ( uint32_t ) __privileged_sram_start__ ) &&
-                ( ulRegionEndAddress <= ( uint32_t ) __privileged_sram_end__ ) )
+            xMPUSettings->xRegion[ 0 ].ulRegionAttribute =
+                ( portMPU_REGION_READ_WRITE ) |
+                ( portMPU_REGION_EXECUTE_NEVER ) |
+                ( ( configTEX_S_C_B_SRAM & portMPU_RASR_TEX_S_C_B_MASK ) << portMPU_RASR_TEX_S_C_B_LOCATION ) |
+                ( prvGetMPURegionSizeSetting( ( uint32_t ) __SRAM_segment_end__ - ( uint32_t ) __SRAM_segment_start__ ) ) |
+                ( portMPU_REGION_ENABLE );
+
+            xMPUSettings->xRegionSettings[ 0 ].ulRegionStartAddress = ( uint32_t ) __SRAM_segment_start__;
+            xMPUSettings->xRegionSettings[ 0 ].ulRegionEndAddress = ( uint32_t ) __SRAM_segment_end__;
+            xMPUSettings->xRegionSettings[ 0 ].ulRegionPermissions = ( tskMPU_READ_PERMISSION |
+                                                                    tskMPU_WRITE_PERMISSION );
+
+            /* Invalidate user configurable regions. */
+            for( ul = 1UL; ul <= portNUM_CONFIGURABLE_REGIONS; ul++ )
             {
-                xMPUSettings->xRegionsSettings[ 0 ].ulRBAR = 0;
-                xMPUSettings->xRegionsSettings[ 0 ].ulRLAR = 0;
-            }
-            else
-            {
-                /* Define the region that allows access to the stack. */
-                ulRegionStartAddress &= portMPU_RBAR_ADDRESS_MASK;
-                ulRegionEndAddress &= portMPU_RLAR_ADDRESS_MASK;
-
-                xMPUSettings->xRegionsSettings[ 0 ].ulRBAR = ( ulRegionStartAddress ) |
-                                                             ( portMPU_REGION_NON_SHAREABLE ) |
-                                                             ( portMPU_REGION_READ_WRITE ) |
-                                                             ( portMPU_REGION_EXECUTE_NEVER );
-
-                xMPUSettings->xRegionsSettings[ 0 ].ulRLAR = ( ulRegionEndAddress ) |
-                                                             ( portMPU_RLAR_ATTR_INDEX0 ) |
-                                                             ( portMPU_RLAR_REGION_ENABLE );
+                xMPUSettings->xRegion[ ul ].ulRegionBaseAddress = ( ( ul - 1UL ) | portMPU_REGION_VALID );
+                xMPUSettings->xRegion[ ul ].ulRegionAttribute = 0UL;
+                xMPUSettings->xRegionSettings[ ul ].ulRegionStartAddress = 0UL;
+                xMPUSettings->xRegionSettings[ ul ].ulRegionEndAddress = 0UL;
+                xMPUSettings->xRegionSettings[ ul ].ulRegionPermissions = 0UL;
             }
         }
-
-        /* User supplied configurable regions. */
-        for( ulRegionNumber = 1; ulRegionNumber <= portNUM_CONFIGURABLE_REGIONS; ulRegionNumber++ )
+        else
         {
-            /* If xRegions is NULL i.e. the task has not specified any MPU
-             * region, the else part ensures that all the configurable MPU
-             * regions are invalidated. */
-            if( ( xRegions != NULL ) && ( xRegions[ lIndex ].ulLengthInBytes > 0UL ) )
+            /* This function is called automatically when the task is created - in
+            * which case the stack region parameters will be valid.  At all other
+            * times the stack parameters will not be valid and it is assumed that the
+            * stack region has already been configured. */
+            if( ulStackDepth > 0 )
             {
-                /* Translate the generic region definition contained in xRegions
-                 * into the ARMv8 specific MPU settings that are then stored in
-                 * xMPUSettings. */
-                ulRegionStartAddress = ( ( uint32_t ) xRegions[ lIndex ].pvBaseAddress ) & portMPU_RBAR_ADDRESS_MASK;
-                ulRegionEndAddress = ( uint32_t ) xRegions[ lIndex ].pvBaseAddress + xRegions[ lIndex ].ulLengthInBytes - 1;
-                ulRegionEndAddress &= portMPU_RLAR_ADDRESS_MASK;
+                /* Define the region that allows access to the stack. */
+                xMPUSettings->xRegion[ 0 ].ulRegionBaseAddress =
+                    ( ( uint32_t ) pxBottomOfStack ) |
+                    ( portMPU_REGION_VALID ) |
+                    ( portSTACK_REGION ); /* Region number. */
 
-                /* Start address. */
-                xMPUSettings->xRegionsSettings[ ulRegionNumber ].ulRBAR = ( ulRegionStartAddress ) |
-                                                                          ( portMPU_REGION_NON_SHAREABLE );
+                xMPUSettings->xRegion[ 0 ].ulRegionAttribute =
+                    ( portMPU_REGION_READ_WRITE ) |
+                    ( portMPU_REGION_EXECUTE_NEVER ) |
+                    ( prvGetMPURegionSizeSetting( ulStackDepth * ( uint32_t ) sizeof( StackType_t ) ) ) |
+                    ( ( configTEX_S_C_B_SRAM & portMPU_RASR_TEX_S_C_B_MASK ) << portMPU_RASR_TEX_S_C_B_LOCATION ) |
+                    ( portMPU_REGION_ENABLE );
 
-                /* RO/RW. */
-                if( ( xRegions[ lIndex ].ulParameters & tskMPU_REGION_READ_ONLY ) != 0 )
+                xMPUSettings->xRegionSettings[ 0 ].ulRegionStartAddress = ( uint32_t ) pxBottomOfStack;
+                xMPUSettings->xRegionSettings[ 0 ].ulRegionEndAddress = ( uint32_t ) ( ( uint32_t ) ( pxBottomOfStack ) +
+                                                                                    ( ulStackDepth * ( uint32_t ) sizeof( StackType_t ) ) - 1UL );
+                xMPUSettings->xRegionSettings[ 0 ].ulRegionPermissions = ( tskMPU_READ_PERMISSION |
+                                                                        tskMPU_WRITE_PERMISSION );
+            }
+
+            lIndex = 0;
+
+            for( ul = 1UL; ul <= portNUM_CONFIGURABLE_REGIONS; ul++ )
+            {
+                if( ( xRegions[ lIndex ] ).ulLengthInBytes > 0UL )
                 {
-                    xMPUSettings->xRegionsSettings[ ulRegionNumber ].ulRBAR |= ( portMPU_REGION_READ_ONLY );
+                    /* Translate the generic region definition contained in
+                    * xRegions into the CM4 specific MPU settings that are then
+                    * stored in xMPUSettings. */
+                    xMPUSettings->xRegion[ ul ].ulRegionBaseAddress =
+                        ( ( uint32_t ) xRegions[ lIndex ].pvBaseAddress ) |
+                        ( portMPU_REGION_VALID ) |
+                        ( ul - 1UL ); /* Region number. */
+
+                    xMPUSettings->xRegion[ ul ].ulRegionAttribute =
+                        ( prvGetMPURegionSizeSetting( xRegions[ lIndex ].ulLengthInBytes ) ) |
+                        ( xRegions[ lIndex ].ulParameters ) |
+                        ( portMPU_REGION_ENABLE );
+
+                    xMPUSettings->xRegionSettings[ ul ].ulRegionStartAddress = ( uint32_t ) xRegions[ lIndex ].pvBaseAddress;
+                    xMPUSettings->xRegionSettings[ ul ].ulRegionEndAddress = ( uint32_t ) ( ( uint32_t ) xRegions[ lIndex ].pvBaseAddress + xRegions[ lIndex ].ulLengthInBytes - 1UL );
+                    xMPUSettings->xRegionSettings[ ul ].ulRegionPermissions = 0UL;
+
+                    if( ( ( xRegions[ lIndex ].ulParameters & portMPU_REGION_READ_ONLY ) == portMPU_REGION_READ_ONLY ) ||
+                        ( ( xRegions[ lIndex ].ulParameters & portMPU_REGION_PRIVILEGED_READ_WRITE_UNPRIV_READ_ONLY ) == portMPU_REGION_PRIVILEGED_READ_WRITE_UNPRIV_READ_ONLY ) )
+                    {
+                        xMPUSettings->xRegionSettings[ ul ].ulRegionPermissions = tskMPU_READ_PERMISSION;
+                    }
+
+                    if( ( xRegions[ lIndex ].ulParameters & portMPU_REGION_READ_WRITE ) == portMPU_REGION_READ_WRITE )
+                    {
+                        xMPUSettings->xRegionSettings[ ul ].ulRegionPermissions = ( tskMPU_READ_PERMISSION | tskMPU_WRITE_PERMISSION );
+                    }
                 }
                 else
                 {
-                    xMPUSettings->xRegionsSettings[ ulRegionNumber ].ulRBAR |= ( portMPU_REGION_READ_WRITE );
+                    /* Invalidate the region. */
+                    xMPUSettings->xRegion[ ul ].ulRegionBaseAddress = ( ( ul - 1UL ) | portMPU_REGION_VALID );
+                    xMPUSettings->xRegion[ ul ].ulRegionAttribute = 0UL;
+                    xMPUSettings->xRegionSettings[ ul ].ulRegionStartAddress = 0UL;
+                    xMPUSettings->xRegionSettings[ ul ].ulRegionEndAddress = 0UL;
+                    xMPUSettings->xRegionSettings[ ul ].ulRegionPermissions = 0UL;
                 }
-
-                /* XN. */
-                if( ( xRegions[ lIndex ].ulParameters & tskMPU_REGION_EXECUTE_NEVER ) != 0 )
-                {
-                    xMPUSettings->xRegionsSettings[ ulRegionNumber ].ulRBAR |= ( portMPU_REGION_EXECUTE_NEVER );
-                }
-
-                /* End Address. */
-                xMPUSettings->xRegionsSettings[ ulRegionNumber ].ulRLAR = ( ulRegionEndAddress ) |
-                                                                          ( portMPU_RLAR_REGION_ENABLE );
-
-                /* Normal memory/ Device memory. */
-                if( ( xRegions[ lIndex ].ulParameters & tskMPU_REGION_DEVICE_MEMORY ) != 0 )
-                {
-                    /* Attr1 in MAIR0 is configured as device memory. */
-                    xMPUSettings->xRegionsSettings[ ulRegionNumber ].ulRLAR |= portMPU_RLAR_ATTR_INDEX1;
-                }
-                else
-                {
-                    /* Attr0 in MAIR0 is configured as normal memory. */
-                    xMPUSettings->xRegionsSettings[ ulRegionNumber ].ulRLAR |= portMPU_RLAR_ATTR_INDEX0;
-                }
-            }
-            else
-            {
-                /* Invalidate the region. */
-                xMPUSettings->xRegionsSettings[ ulRegionNumber ].ulRBAR = 0UL;
-                xMPUSettings->xRegionsSettings[ ulRegionNumber ].ulRLAR = 0UL;
-            }
 
             lIndex++;
         }
     }
+}
 #endif /* configENABLE_MPU */
 /*-----------------------------------------------------------*/
 
@@ -1927,21 +1915,16 @@ void vPortEndScheduler( void ) /* PRIVILEGED_FUNCTION */
 
                 for( i = 0; i < portTOTAL_NUM_REGIONS; i++ )
                 {
-                    /* Is the MPU region enabled? */
-                    if( ( xTaskMpuSettings->xRegionsSettings[ i ].ulRLAR & portMPU_RLAR_REGION_ENABLE ) == portMPU_RLAR_REGION_ENABLE )
+                    if( portIS_ADDRESS_WITHIN_RANGE( ulBufferStartAddress,
+                                                    xTaskMpuSettings->xRegionSettings[ i ].ulRegionStartAddress,
+                                                    xTaskMpuSettings->xRegionSettings[ i ].ulRegionEndAddress ) &&
+                        portIS_ADDRESS_WITHIN_RANGE( ulBufferEndAddress,
+                                                    xTaskMpuSettings->xRegionSettings[ i ].ulRegionStartAddress,
+                                                    xTaskMpuSettings->xRegionSettings[ i ].ulRegionEndAddress ) &&
+                        portIS_AUTHORIZED( ulAccessRequested, xTaskMpuSettings->xRegionSettings[ i ].ulRegionPermissions ) )
                     {
-                        if( portIS_ADDRESS_WITHIN_RANGE( ulBufferStartAddress,
-                                                         portEXTRACT_FIRST_ADDRESS_FROM_RBAR( xTaskMpuSettings->xRegionsSettings[ i ].ulRBAR ),
-                                                         portEXTRACT_LAST_ADDRESS_FROM_RLAR( xTaskMpuSettings->xRegionsSettings[ i ].ulRLAR ) ) &&
-                            portIS_ADDRESS_WITHIN_RANGE( ulBufferEndAddress,
-                                                         portEXTRACT_FIRST_ADDRESS_FROM_RBAR( xTaskMpuSettings->xRegionsSettings[ i ].ulRBAR ),
-                                                         portEXTRACT_LAST_ADDRESS_FROM_RLAR( xTaskMpuSettings->xRegionsSettings[ i ].ulRLAR ) ) &&
-                            portIS_AUTHORIZED( ulAccessRequested,
-                                               prvGetRegionAccessPermissions( xTaskMpuSettings->xRegionsSettings[ i ].ulRBAR ) ) )
-                        {
-                            xAccessGranted = pdTRUE;
-                            break;
-                        }
+                        xAccessGranted = pdTRUE;
+                        break;
                     }
                 }
             }

@@ -144,58 +144,96 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 #endif
 
 /* MPU regions. */
-#define portPRIVILEGED_FLASH_REGION                   ( 0UL )
-#define portUNPRIVILEGED_FLASH_REGION                 ( 1UL )
-#define portUNPRIVILEGED_SYSCALLS_REGION              ( 2UL )
-#define portPRIVILEGED_RAM_REGION                     ( 3UL )
+#define portPRIVILEGED_FLASH_REGION                   ( 6UL )
+#define portUNPRIVILEGED_FLASH_REGION                 ( 5UL )
+#define portLAST_CONFIGURABLE_REGION                  ( 3UL )
+#define portPRIVILEGED_RAM_REGION                     ( 7UL )
 #define portSTACK_REGION                              ( 4UL )
-#define portFIRST_CONFIGURABLE_REGION                 ( 5UL )
-#define portLAST_CONFIGURABLE_REGION                  ( configTOTAL_MPU_REGIONS - 1UL )
+#define portFIRST_CONFIGURABLE_REGION                 ( 0UL )
 #define portNUM_CONFIGURABLE_REGIONS                  ( ( portLAST_CONFIGURABLE_REGION - portFIRST_CONFIGURABLE_REGION ) + 1 )
 #define portTOTAL_NUM_REGIONS                         ( portNUM_CONFIGURABLE_REGIONS + 1 )       /* Plus one to make space for the stack region. */
 
-/* Device memory attributes used in MPU_MAIR registers.
- *
- * 8-bit values encoded as follows:
- *  Bit[7:4] - 0000 - Device Memory
- *  Bit[3:2] - 00 --> Device-nGnRnE
- *              01 --> Device-nGnRE
- *              10 --> Device-nGRE
- *              11 --> Device-GRE
- *  Bit[1:0] - 00, Reserved.
- */
-#define portMPU_DEVICE_MEMORY_nGnRnE                  ( 0x00 )       /* 0000 0000 */
-#define portMPU_DEVICE_MEMORY_nGnRE                   ( 0x04 )       /* 0000 0100 */
-#define portMPU_DEVICE_MEMORY_nGRE                    ( 0x08 )       /* 0000 1000 */
-#define portMPU_DEVICE_MEMORY_GRE                     ( 0x0C )       /* 0000 1100 */
-
-/* Normal memory attributes used in MPU_MAIR registers. */
-#define portMPU_NORMAL_MEMORY_NON_CACHEABLE           ( 0x44 )       /* Non-cacheable. */
-#define portMPU_NORMAL_MEMORY_BUFFERABLE_CACHEABLE    ( 0xFF )       /* Non-Transient, Write-back, Read-Allocate and Write-Allocate. */
 
 /* Attributes used in MPU_RBAR registers. */
-#define portMPU_REGION_NON_SHAREABLE                  ( 0UL << 3UL )
-#define portMPU_REGION_INNER_SHAREABLE                ( 1UL << 3UL )
-#define portMPU_REGION_OUTER_SHAREABLE                ( 2UL << 3UL )
+#define portMPU_REGION_READ_WRITE                                ( 0x3UL << 24UL )
+#define portMPU_REGION_PRIVILEGED_READ_ONLY                      ( 0x5UL << 24UL )
+#define portMPU_REGION_READ_ONLY                                 ( 0x6UL << 24UL )
+#define portMPU_REGION_PRIVILEGED_READ_WRITE                     ( 0x1UL << 24UL )
+#define portMPU_REGION_PRIVILEGED_READ_WRITE_UNPRIV_READ_ONLY    ( 0x2UL << 24UL )
+#define portMPU_REGION_STRONGLY_ORDERED                          ( 0x0UL << 16UL )
+#define portMPU_REGION_DEVICE_MEMORY                             ( 0x1UL << 16UL )
+#define portMPU_REGION_CACHEABLE_BUFFERABLE                      ( 0x7UL << 16UL )
+#define portMPU_REGION_EXECUTE_NEVER                             ( 0x1UL << 28UL )
 
-#define portMPU_REGION_PRIVILEGED_READ_WRITE          ( 0UL << 1UL )
-#define portMPU_REGION_READ_WRITE                     ( 1UL << 1UL )
-#define portMPU_REGION_PRIVILEGED_READ_ONLY           ( 2UL << 1UL )
-#define portMPU_REGION_READ_ONLY                      ( 3UL << 1UL )
+/* Constants required to access and manipulate the MPU. */
+#define portMPU_TYPE_REG                          ( *( ( volatile uint32_t * ) 0xE000ED90 ) )
+#define portMPU_REGION_BASE_ADDRESS_REG           ( *( ( volatile uint32_t * ) 0xE000ED9C ) )
+#define portMPU_REGION_ATTRIBUTE_REG              ( *( ( volatile uint32_t * ) 0xE000EDA0 ) )
+#define portMPU_CTRL_REG                          ( *( ( volatile uint32_t * ) 0xE000ED94 ) )
+#define portEXPECTED_MPU_TYPE_VALUE               ( configTOTAL_MPU_REGIONS << 8UL )
+#define portMPU_ENABLE                            ( 0x01UL )
+#define portMPU_BACKGROUND_ENABLE                 ( 1UL << 2UL )
+#define portPRIVILEGED_EXECUTION_START_ADDRESS    ( 0UL )
+#define portMPU_REGION_VALID                      ( 0x10UL )
+#define portMPU_REGION_ENABLE                     ( 0x01UL )
+#define portPERIPHERALS_START_ADDRESS             0x40000000UL
+#define portPERIPHERALS_END_ADDRESS               0x5FFFFFFFUL
 
-#define portMPU_REGION_EXECUTE_NEVER                  ( 1UL )
+#define portMPU_RASR_TEX_S_C_B_MASK               ( 0x3FUL )
+#define portMPU_RASR_TEX_S_C_B_LOCATION           ( 16U )
+#define portNVIC_MEM_FAULT_ENABLE                 ( 1UL << 16UL )
+
+/* Constants required to access and manipulate the SysTick. */
+#define portNVIC_SYSTICK_CLK_BIT              ( 1UL << 2UL )
+#define portNVIC_SYSTICK_INT_BIT              ( 1UL << 1UL )
+#define portNVIC_SYSTICK_ENABLE_BIT           ( 1UL << 0UL )
+#define portNVIC_SYSTICK_COUNT_FLAG_BIT       ( 1UL << 16UL )
+#define portNVIC_PEND_SYSTICK_SET_BIT         ( 1UL << 26UL )
+#define portNVIC_PEND_SYSTICK_CLEAR_BIT       ( 1UL << 25UL )
+#define portMIN_INTERRUPT_PRIORITY            ( 255UL )
+#define portNVIC_PENDSV_PRI                   ( portMIN_INTERRUPT_PRIORITY << 16UL )
+#define portNVIC_SYSTICK_PRI                  ( portMIN_INTERRUPT_PRIORITY << 24UL )
+
+#define portNVIC_SYSTICK_INT                      ( 0x00000002UL )
+#define portNVIC_SYSTICK_ENABLE                   ( 0x00000001UL )
+#define portNVIC_SVC_PRI                          ( ( ( uint32_t ) configMAX_SYSCALL_INTERRUPT_PRIORITY - 1UL ) << 24UL )
+#define portNVIC_SYSTICK_PRI                  ( portMIN_INTERRUPT_PRIORITY << 24UL )
+
+#define portNVIC_PENDSVSET_BIT                ( 1UL << 28UL )
+#define portNVIC_PEND_SYSTICK_SET_BIT         ( 1UL << 26UL )
+#define portNVIC_PEND_SYSTICK_CLEAR_BIT       ( 1UL << 25UL )
+#define portMIN_INTERRUPT_PRIORITY            ( 255UL )
+#define portNVIC_PENDSV_PRI                   ( portMIN_INTERRUPT_PRIORITY << 16UL )
+#define portNVIC_SHPR2_REG                 ( *( ( volatile uint32_t * ) 0xE000ED1C ) )
+#define portNVIC_SYS_CTRL_STATE_REG               ( *( ( volatile uint32_t * ) 0xe000ed24 ) )
+
+/* Constants used to check the installation of the FreeRTOS interrupt handlers. */
+#define portSCB_VTOR_REG                      ( *( ( portISR_t ** ) 0xe000ed08 ) )
+#define portVECTOR_INDEX_PENDSV               ( 14 )
+
+/* The systick is a 24-bit counter. */
+#define portMAX_24_BIT_NUMBER                 ( 0xffffffUL )
+
 /*-----------------------------------------------------------*/
 
 #if ( configENABLE_MPU == 1 )
 
-/**
- * @brief Settings to define an MPU region.
- */
-    typedef struct MPURegionSettings
+    /**
+     * @brief Settings to define an MPU region.
+     */
+    typedef struct MPU_REGION_REGISTERS
     {
-        uint32_t ulRBAR; /**< RBAR for the region. */
-        uint32_t ulRLAR; /**< RLAR for the region. */
-    } MPURegionSettings_t;
+        uint32_t ulRegionBaseAddress;
+        uint32_t ulRegionAttribute;
+    } xMPU_REGION_REGISTERS;
+
+    typedef struct MPU_REGION_SETTINGS
+    {
+        uint32_t ulRegionStartAddress;
+        uint32_t ulRegionEndAddress;
+        uint32_t ulRegionPermissions;
+    } xMPU_REGION_SETTINGS;
+
 
     #if ( configUSE_MPU_WRAPPERS_V1 == 0 )
 
@@ -203,17 +241,15 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
             #error configSYSTEM_CALL_STACK_SIZE must be defined to the desired size of the system call stack in words for using MPU wrappers v2.
         #endif
 
-/**
- * @brief System call stack.
- */
+        /**
+         * @brief System call stack.
+         */
         typedef struct SYSTEM_CALL_STACK_INFO
         {
-            uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ];
             uint32_t * pulSystemCallStack;
-            uint32_t * pulSystemCallStackLimit;
             uint32_t * pulTaskStack;
             uint32_t ulLinkRegisterAtSystemCallEntry;
-            uint32_t ulStackLimitRegisterAtSystemCallEntry;
+            uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ];
         } xSYSTEM_CALL_STACK_INFO;
 
     #endif /* configUSE_MPU_WRAPPERS_V1 == 0 */
@@ -221,67 +257,17 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 /**
  * @brief MPU settings as stored in the TCB.
  */
-    #if ( ( configENABLE_FPU == 1 ) || ( configENABLE_MVE == 1 ) )
-
-        #if ( configENABLE_TRUSTZONE == 1 )
-
-/*
- * +-----------+---------------+----------+-----------------+------------------------------+-----+
- * |  s16-s31  | s0-s15, FPSCR |  r4-r11  | r0-r3, r12, LR, | xSecureContext, PSP, PSPLIM, |     |
- * |           |               |          | PC, xPSR        | CONTROL, EXC_RETURN          |     |
- * +-----------+---------------+----------+-----------------+------------------------------+-----+
- *
- * <-----------><--------------><---------><----------------><-----------------------------><---->
- *      16             16            8               8                     5                   1
- */
-            #define MAX_CONTEXT_SIZE    54
-
-        #else /* #if( configENABLE_TRUSTZONE == 1 ) */
-
-/*
- * +-----------+---------------+----------+-----------------+----------------------+-----+
- * |  s16-s31  | s0-s15, FPSCR |  r4-r11  | r0-r3, r12, LR, | PSP, PSPLIM, CONTROL |     |
- * |           |               |          | PC, xPSR        | EXC_RETURN           |     |
- * +-----------+---------------+----------+-----------------+----------------------+-----+
- *
- * <-----------><--------------><---------><----------------><---------------------><---->
- *      16             16            8               8                  4              1
- */
-            #define MAX_CONTEXT_SIZE    53
-
-        #endif /* #if( configENABLE_TRUSTZONE == 1 ) */
-
-    #else /* #if ( ( configENABLE_FPU == 1 ) || ( configENABLE_MVE == 1 ) ) */
-
-        #if ( configENABLE_TRUSTZONE == 1 )
-
-/*
- * +----------+-----------------+------------------------------+-----+
- * |  r4-r11  | r0-r3, r12, LR, | xSecureContext, PSP, PSPLIM, |     |
- * |          | PC, xPSR        | CONTROL, EXC_RETURN          |     |
- * +----------+-----------------+------------------------------+-----+
- *
- * <---------><----------------><------------------------------><---->
- *     8               8                      5                   1
- */
-            #define MAX_CONTEXT_SIZE    22
-
-        #else /* #if( configENABLE_TRUSTZONE == 1 ) */
 
 /*
  * +----------+-----------------+----------------------+-----+
- * |  r4-r11  | r0-r3, r12, LR, | PSP, PSPLIM, CONTROL |     |
+ * |  r4-r11  | r0-r3, r12, LR, | PSP, CONTROL |     |
  * |          | PC, xPSR        | EXC_RETURN           |     |
  * +----------+-----------------+----------------------+-----+
  *
  * <---------><----------------><----------------------><---->
  *     8               8                  4              1
  */
-            #define MAX_CONTEXT_SIZE    21
-
-        #endif /* #if( configENABLE_TRUSTZONE == 1 ) */
-
-    #endif /* #if ( ( configENABLE_FPU == 1 ) || ( configENABLE_MVE == 1 ) ) */
+    #define MAX_CONTEXT_SIZE    20
 
 /* Flags used for xMPU_SETTINGS.ulTaskFlags member. */
     #define portSTACK_FRAME_HAS_PADDING_FLAG    ( 1UL << 0UL )
@@ -292,8 +278,8 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 
     typedef struct MPU_SETTINGS
     {
-        uint32_t ulMAIR0;                                              /**< MAIR0 for the task containing attributes for all the 4 per task regions. */
-        MPURegionSettings_t xRegionsSettings[ portTOTAL_NUM_REGIONS ]; /**< Settings for 4 per task regions. */
+        xMPU_REGION_REGISTERS xRegion[ portTOTAL_NUM_REGIONS ];
+        xMPU_REGION_SETTINGS xRegionSettings[ portTOTAL_NUM_REGIONS ];
         uint32_t ulContext[ MAX_CONTEXT_SIZE ];
         uint32_t ulTaskFlags;
 
@@ -322,9 +308,7 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 /**
  * @brief SVC numbers.
  */
-#define portSVC_ALLOCATE_SECURE_CONTEXT    100
-#define portSVC_FREE_SECURE_CONTEXT        101
-#define portSVC_START_SCHEDULER            102
+#define portSVC_START_SCHEDULER            100
 #define portSVC_RAISE_PRIVILEGE            103
 #define portSVC_SYSTEM_CALL_EXIT           104
 #define portSVC_YIELD                      105
@@ -335,7 +319,17 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
  */
 #if ( configENABLE_MPU == 1 )
     #define portYIELD()               __asm volatile ( "svc %0" ::"i" ( portSVC_YIELD ) : "memory" )
-    #define portYIELD_WITHIN_API()    vPortYield()
+    #define portYIELD_WITHIN_API()                      \
+    {                                                   \
+        /* Set a PendSV to request a context switch. */ \
+        portNVIC_INT_CTRL_REG = portNVIC_PENDSVSET_BIT; \
+                                                        \
+        /* Barriers are normally not required but do ensure the code is completely \
+         * within the specified behaviour for the architecture. */ \
+        __asm volatile ( "dsb" ::: "memory" );                     \
+        __asm volatile ( "isb" );                                  \
+    }
+
 #else
     #define portYIELD()               vPortYield()
     #define portYIELD_WITHIN_API()    vPortYield()
@@ -382,29 +376,6 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
  */
 #define portTASK_FUNCTION_PROTO( vFunction, pvParameters )    void vFunction( void * pvParameters )
 #define portTASK_FUNCTION( vFunction, pvParameters )          void vFunction( void * pvParameters )
-/*-----------------------------------------------------------*/
-
-#if ( configENABLE_TRUSTZONE == 1 )
-
-/**
- * @brief Allocate a secure context for the task.
- *
- * Tasks are not created with a secure context. Any task that is going to call
- * secure functions must call portALLOCATE_SECURE_CONTEXT() to allocate itself a
- * secure context before it calls any secure function.
- *
- * @param[in] ulSecureStackSize The size of the secure stack to be allocated.
- */
-    #define portALLOCATE_SECURE_CONTEXT( ulSecureStackSize )    vPortAllocateSecureContext( ulSecureStackSize )
-
-/**
- * @brief Called when a task is deleted to delete the task's secure context,
- * if it has one.
- *
- * @param[in] pxTCB The TCB of the task being deleted.
- */
-    #define portCLEAN_UP_TCB( pxTCB )                           vPortFreeSecureContext( ( uint32_t * ) pxTCB )
-#endif /* configENABLE_TRUSTZONE */
 /*-----------------------------------------------------------*/
 
 #if ( configENABLE_MPU == 1 )
@@ -460,18 +431,14 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 /* Select correct value of configUSE_PORT_OPTIMISED_TASK_SELECTION
  * based on whether or not Mainline extension is implemented. */
 #ifndef configUSE_PORT_OPTIMISED_TASK_SELECTION
-    #if ( portHAS_ARMV8M_MAIN_EXTENSION == 1 )
-        #define configUSE_PORT_OPTIMISED_TASK_SELECTION    1
-    #else
-        #define configUSE_PORT_OPTIMISED_TASK_SELECTION    0
-    #endif
+    #define configUSE_PORT_OPTIMISED_TASK_SELECTION    0
 #endif /* #ifndef configUSE_PORT_OPTIMISED_TASK_SELECTION */
 
 /**
  * @brief Port-optimised task selection.
  */
 #if ( configUSE_PORT_OPTIMISED_TASK_SELECTION == 1 )
-
+    #error There is no ASM Instruction to count leading zeros on the ARMv6M architecture
 /**
  * @brief Count the number of leading zeros in a 32-bit value.
  */

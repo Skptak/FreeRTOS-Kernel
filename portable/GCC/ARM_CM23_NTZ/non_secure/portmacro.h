@@ -48,8 +48,7 @@
 /**
  * Architecture specifics.
  */
-#define portARCH_NAME                    "Cortex-M23"
-#define portHAS_ARMV8M_MAIN_EXTENSION    0
+#define portARCH_NAME                    "Cortex-M0+"
 #define portDONT_DISCARD                 __attribute__( ( used ) )
 /*-----------------------------------------------------------*/
 
@@ -57,8 +56,8 @@
 #include "portmacrocommon.h"
 /*-----------------------------------------------------------*/
 
-#if ( configTOTAL_MPU_REGIONS == 16 )
-    #error 16 MPU regions are not yet supported for this port.
+#if ( configTOTAL_MPU_REGIONS != 8 )
+    #error The ARM Cortex M0+ Only supports 8 MPU Regions
 #endif
 
 #ifndef configENABLE_MVE
