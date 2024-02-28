@@ -144,13 +144,12 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 #endif
 
 /* MPU regions. */
-#define portPRIVILEGED_FLASH_REGION                   ( 0UL )
-#define portUNPRIVILEGED_FLASH_REGION                 ( 1UL )
-#define portUNPRIVILEGED_SYSCALLS_REGION              ( 2UL )
-#define portPRIVILEGED_RAM_REGION                     ( 3UL )
+#define portPRIVILEGED_FLASH_REGION                   ( 6UL )
+#define portUNPRIVILEGED_FLASH_REGION                 ( 5UL )
+#define portLAST_CONFIGURABLE_REGION                  ( 3UL )
+#define portPRIVILEGED_RAM_REGION                     ( 7UL )
 #define portSTACK_REGION                              ( 4UL )
-#define portFIRST_CONFIGURABLE_REGION                 ( 5UL )
-#define portLAST_CONFIGURABLE_REGION                  ( configTOTAL_MPU_REGIONS - 1UL )
+#define portFIRST_CONFIGURABLE_REGION                 ( 0UL )
 #define portNUM_CONFIGURABLE_REGIONS                  ( ( portLAST_CONFIGURABLE_REGION - portFIRST_CONFIGURABLE_REGION ) + 1 )
 #define portTOTAL_NUM_REGIONS                         ( portNUM_CONFIGURABLE_REGIONS + 1 )       /* Plus one to make space for the stack region. */
 
@@ -178,13 +177,24 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 #define portMPU_REGION_INNER_SHAREABLE                ( 1UL << 3UL )
 #define portMPU_REGION_OUTER_SHAREABLE                ( 2UL << 3UL )
 
-#define portMPU_REGION_PRIVILEGED_READ_WRITE          ( 0UL << 1UL )
-#define portMPU_REGION_READ_WRITE                     ( 1UL << 1UL )
-#define portMPU_REGION_PRIVILEGED_READ_ONLY           ( 2UL << 1UL )
-#define portMPU_REGION_READ_ONLY                      ( 3UL << 1UL )
+#define portMPU_REGION_PRIVILEGED_READ_WRITE          ( 1UL << 24UL )
+#define portMPU_REGION_READ_WRITE                     ( 3UL << 24UL )
+#define portMPU_REGION_PRIVILEGED_READ_ONLY           ( 5UL << 24UL )
+#define portMPU_REGION_READ_ONLY                      ( 6UL << 24UL )
 
-#define portMPU_REGION_EXECUTE_NEVER                  ( 1UL )
+#define portMPU_REGION_EXECUTE_NEVER                  ( 0x1UL << 28UL )
 /*-----------------------------------------------------------*/
+
+/* Attributes used in MPU_RASR registers. */
+#define portMPU_REGION_PRIVILEGED_READ_WRITE_UNPRIV_READ_ONLY    ( 0x2UL << 24UL )
+#define portMPU_REGION_STRONGLY_ORDERED                          ( 0x0UL << 16UL )
+#define portMPU_REGION_DEVICE_MEMORY                             ( 0x1UL << 16UL )
+#define portMPU_REGION_CACHEABLE_BUFFERABLE                      ( 0x7UL << 16UL )
+
+#define portMPU_REGION_VALID                      ( 0x10UL )
+#define portMPU_RASR_TEX_S_C_B_MASK               ( 0x3FUL )
+#define portMPU_RASR_TEX_S_C_B_LOCATION           ( 16U )
+#define portNVIC_MEM_FAULT_ENABLE                 ( 1UL << 16UL )
 
 #if ( configENABLE_MPU == 1 )
 
@@ -194,7 +204,7 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
     typedef struct MPURegionSettings
     {
         uint32_t ulRBAR; /**< RBAR for the region. */
-        uint32_t ulRLAR; /**< RLAR for the region. */
+        uint32_t ulRASR; /**< RASR for the region. */
     } MPURegionSettings_t;
 
     #if ( configUSE_MPU_WRAPPERS_V1 == 0 )
