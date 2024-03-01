@@ -105,14 +105,12 @@
             "    str r5, [r2]                                 \n" /* r2 = 0xe000ed9c [Location of RBAR]. */
             "    str r6, [r3]                                 \n" /* r3 = 0xe000eda0 [Location of RASR]. */
             "                                                 \n"
-#if 1
             "    ldr r1, =0xe000ed94                          \n" /* MPU_CTRL register. */
             "    ldr r2, [r1]                                 \n" /* Read the value of MPU_CTRL. */
             "    movs r3, #1                                  \n" /* r3 = 1. */
             "    orrs r2, r3                                  \n" /* r2 = r2 | r3 i.e. Set the bit 0 in r2. */
             "    str r2, [r1]                                 \n" /* Enable MPU. */
             "    dsb                                          \n" /* Force memory writes before continuing. */
-#endif
             "                                                 \n"
             " restore_context_first_task:                     \n"
             "    ldr r2, =pxCurrentTCB                        \n" /* r2 = &pxCurrentTCB. */
@@ -334,11 +332,11 @@ void vClearInterruptMask( __attribute__( ( unused ) ) uint32_t ulMask ) /* __att
             "                                                 \n"
             " program_mpu:                                    \n"
             "    dmb                                          \n" /* Complete outstanding transfers before disabling MPU. */
-            "    ldr     r1, =0xe000ed94                      \n" /* MPU_CTRL register. */
-            "    ldr     r2, [r1]                             \n" /* Read the value of MPU_CTRL. */
-            "    movs    r3, #0x1                             \n"
-            "    bics    r2, r2, r3                           \n" /* r2 = r2 & ~1 i.e. Clear the bit 0 in r2. */
-            "    str     r2, [r1]                             \n" /* Disable MPU */
+            "    ldr r1, =0xe000ed94                          \n" /* r1 = 0xe000ed94 [Location of MPU_CTRL]. */
+            "    ldr r2, [r1]                                 \n" /* Read the value of MPU_CTRL. */
+            "    movs r3, #0x1                                \n" /* r3 = 1. */
+            "    bics r2, r3                                  \n" /* r2 = r2 & ~1 i.e. Clear the bit 0 in r2. */
+            "    str r2, [r1]                                 \n" /* Disable MPU */
             "                                                 \n"
             "    ldr r2, =0xe000ed9c                          \n" /* r2 = 0xe000ed9c [Location of RBAR]. */
             "    ldr r3, =0xe000eda0                          \n" /* r3 = 0xe000eda0 [Location of RASR]. */
@@ -364,8 +362,8 @@ void vClearInterruptMask( __attribute__( ( unused ) ) uint32_t ulMask ) /* __att
             "    str r6, [r3]                                 \n" /* r3 = 0xe000eda0 [Location of RASR]. */
             "                                                 \n"
             "    ldr r2, [r1]                                 \n" /* Read the value of MPU_CTRL. */
-            "    movs r3, #0x1                                \n"
-            "    orrs r2, r2, r3                              \n" /* r2 = r2 & ~1 i.e. Clear the bit 0 in r2. */
+            "    movs r3, #1                                  \n" /* r3 = 1. */
+            "    orrs r2, r3                                  \n" /* r2 = r2 | r3 i.e. Set the bit 0 in r2. */
             "    str r2, [r1]                                 \n" /* Enable MPU. */
             "    dsb                                          \n" /* Force memory writes before continuing. */
             "                                                 \n"
@@ -493,10 +491,10 @@ void vClearInterruptMask( __attribute__( ( unused ) ) uint32_t ulMask ) /* __att
             "    ldr r3, [r0, #24]          \n"
             "    subs r3, #2                \n"
             "    ldrb r2, [r3, #0]          \n"
-            "    ldr r3, =%0               \n"
+            "    ldr r3, =%0                \n"
             "    cmp r2, r3                 \n"
             "    blt system_call_enter      \n"
-            "    ldr r3, =%1               \n"
+            "    ldr r3, =%1                \n"
             "    cmp r2, r3                 \n"
             "    beq system_call_exit       \n"
             "    b vPortSVCHandler_C        \n"

@@ -383,14 +383,14 @@ static void prvTaskExitError( void );
 #if ( configENABLE_MPU == 1 )
 
 /**
- * @brief Extract MPU region's access permissions from the Region Base Address
- * Register (RBAR) value.
+ * @brief Extract MPU region's access permissions from the Region Attribute and Size
+ * Register (RASR) value.
  *
- * @param ulRBARValue RBAR value for the MPU region.
+ * @param ulRASRValue RASR value for the MPU region.
  *
  * @return uint32_t Access permissions.
  */
-    static uint32_t prvGetRegionAccessPermissions( uint32_t ulRBARValue ) PRIVILEGED_FUNCTION;
+    static uint32_t prvGetRegionAccessPermissions( uint32_t ulRASRValue ) PRIVILEGED_FUNCTION;
 #endif /* configENABLE_MPU */
 
 #if ( configENABLE_MPU == 1 )
@@ -832,16 +832,16 @@ static void prvTaskExitError( void )
 /*-----------------------------------------------------------*/
 
 #if ( configENABLE_MPU == 1 )
-    static uint32_t prvGetRegionAccessPermissions( uint32_t ulRBARValue ) /* PRIVILEGED_FUNCTION */
+    static uint32_t prvGetRegionAccessPermissions( uint32_t ulRASRValue ) /* PRIVILEGED_FUNCTION */
     {
         uint32_t ulAccessPermissions = 0;
 
-        if( ( ulRBARValue & portMPU_RASR_ACCESS_PERMISSIONS_MASK ) == portMPU_REGION_READ_ONLY )
+        if( ( ulRASRValue & portMPU_RASR_ACCESS_PERMISSIONS_MASK ) == portMPU_REGION_READ_ONLY )
         {
             ulAccessPermissions = tskMPU_READ_PERMISSION;
         }
 
-        if( ( ulRBARValue & portMPU_RASR_ACCESS_PERMISSIONS_MASK ) == portMPU_REGION_READ_WRITE )
+        if( ( ulRASRValue & portMPU_RASR_ACCESS_PERMISSIONS_MASK ) == portMPU_REGION_READ_WRITE )
         {
             ulAccessPermissions = ( tskMPU_READ_PERMISSION | tskMPU_WRITE_PERMISSION );
         }
@@ -1785,7 +1785,7 @@ void vPortEndScheduler( void ) /* PRIVILEGED_FUNCTION */
     void vPortStoreTaskMPUSettings( xMPU_SETTINGS * xMPUSettings,
                                 const struct xMEMORY_REGION * const xRegions,
                                 StackType_t * pxBottomOfStack,
-                                uint32_t ulStackDepth )
+                                configSTACK_DEPTH_TYPE uxStackDepth )
     {
         #if defined( __ARMCC_VERSION )
 
@@ -1801,7 +1801,7 @@ void vPortEndScheduler( void ) /* PRIVILEGED_FUNCTION */
             extern uint32_t __SRAM_segment_end__[];
             extern uint32_t __privileged_sram_start__[];
             extern uint32_t __privileged_sram_end__[];
-        #endif /* if defined( __ARMCC_VERSION ) */
+        #endif /* defined( __ARMCC_VERSION ) */
 
         int32_t lIndex;
         uint32_t ul;
@@ -1835,7 +1835,7 @@ void vPortEndScheduler( void ) /* PRIVILEGED_FUNCTION */
             * which case the stack region parameters will be valid.  At all other
             * times the stack parameters will not be valid and it is assumed that the
             * stack region has already been configured. */
-            if( ulStackDepth > 0 )
+            if( uxStackDepth > 0 )
             {
                 /* Define the region that allows access to the stack. */
                 xMPUSettings->xRegionsSettings[ 0 ].ulRBAR =
@@ -1846,7 +1846,7 @@ void vPortEndScheduler( void ) /* PRIVILEGED_FUNCTION */
                 xMPUSettings->xRegionsSettings[ 0 ].ulRASR =
                     ( portMPU_REGION_READ_WRITE ) |
                     ( portMPU_REGION_EXECUTE_NEVER ) |
-                    ( prvGetMPURegionSizeSetting( ulStackDepth * ( uint32_t ) sizeof( StackType_t ) ) ) |
+                    ( prvGetMPURegionSizeSetting( uxStackDepth * ( uint32_t ) sizeof( StackType_t ) ) ) |
                     ( ( configTEX_S_C_B_SRAM & portMPU_RASR_TEX_S_C_B_MASK ) << portMPU_RASR_TEX_S_C_B_LOCATION ) |
                     ( portMPU_REGION_ENABLE );
 

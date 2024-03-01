@@ -146,10 +146,11 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 /* MPU regions. */
 #define portPRIVILEGED_FLASH_REGION                   ( 6UL )
 #define portUNPRIVILEGED_FLASH_REGION                 ( 5UL )
-#define portLAST_CONFIGURABLE_REGION                  ( 3UL )
+#define portUNPRIVILEGED_SYSCALLS_REGION              ( 2UL )
 #define portPRIVILEGED_RAM_REGION                     ( 7UL )
 #define portSTACK_REGION                              ( 4UL )
 #define portFIRST_CONFIGURABLE_REGION                 ( 0UL )
+#define portLAST_CONFIGURABLE_REGION                  ( 3UL )
 #define portNUM_CONFIGURABLE_REGIONS                  ( ( portLAST_CONFIGURABLE_REGION - portFIRST_CONFIGURABLE_REGION ) + 1 )
 #define portTOTAL_NUM_REGIONS                         ( portNUM_CONFIGURABLE_REGIONS + 1 )       /* Plus one to make space for the stack region. */
 
