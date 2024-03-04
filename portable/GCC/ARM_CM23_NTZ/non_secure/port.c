@@ -888,7 +888,7 @@ static void prvTaskExitError( void )
             extern uint32_t * __FLASH_segment_end__;
             extern uint32_t * __privileged_sram_start__;
             extern uint32_t * __privileged_sram_end__;
-        #else
+        #else /* if defined( __ARMCC_VERSION ) */
             /* Declaration when these variable are exported from linker scripts. */
             extern uint32_t __privileged_functions_start__[];
             extern uint32_t __privileged_functions_end__[];
@@ -896,7 +896,10 @@ static void prvTaskExitError( void )
             extern uint32_t __FLASH_segment_end__[];
             extern uint32_t __privileged_sram_start__[];
             extern uint32_t __privileged_sram_end__[];
-        #endif /* if defined( __ARMCC_VERSION ) */
+        #endif /* defined( __ARMCC_VERSION ) */
+
+        /* The only permitted number of regions is 8. */
+        configASSERT( configTOTAL_MPU_REGIONS == 8 );
 
         /* Ensure that the configTOTAL_MPU_REGIONS is configured correctly. */
         configASSERT( portMPU_TYPE_REG == portEXPECTED_MPU_TYPE_VALUE );
@@ -1781,7 +1784,6 @@ void vPortEndScheduler( void ) /* PRIVILEGED_FUNCTION */
 /*-----------------------------------------------------------*/
 
 #if ( configENABLE_MPU == 1 )
-
     void vPortStoreTaskMPUSettings( xMPU_SETTINGS * xMPUSettings,
                                 const struct xMEMORY_REGION * const xRegions,
                                 StackType_t * pxBottomOfStack,
