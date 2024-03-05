@@ -146,7 +146,9 @@ PRIVILEGED_FUNCTION void vPortExitCritical( void );
 /* ----------------------------------------------------------------------------------- */
 
 
-/** @brief Determine if the MPU Register Settings are valid MPU Settings */
+/**
+ * @brief Determine if the MPU Register Settings are valid MPU Settings
+ */
 BaseType_t xPortMPURegisterCheck(
     xMPU_REGION_REGISTERS * xMPURegisters,
     uint32_t ulTaskFlags
@@ -175,23 +177,24 @@ BaseType_t xPortMPURegisterCheck(
     extern uint32_t __privileged_data_end__[];
 #endif /* if defined( __ARMCC_VERSION ) */
 
-    volatile BaseType_t retVal;
+    BaseType_t retVal;
     if( NULL == xMPURegisters )
     {
         retVal = pdFAIL;
-        configASSERT( retVal == pdTRUE );
     }
+
     else if( ( xMPURegisters->ulRegionSize & portMPU_REGION_ENABLE ) != portMPU_REGION_ENABLE )
     {
         retVal = pdPASS;
     }
+
     else
     {
-        volatile uint32_t ulBaseAddr = xMPURegisters->ulRegionBaseAddress;
+        uint32_t ulBaseAddr = xMPURegisters->ulRegionBaseAddress;
         /* Bits [5:1] are the MPU Region Size Bits, need to clear the enable bit */
-        volatile uint32_t ulSize = xMPURegisters->ulRegionSize;
-        volatile uint32_t ulSizeMask = 2UL << ( xMPURegisters->ulRegionSize >> 1U );
-        volatile uint32_t ulAttributes = xMPURegisters->ulRegionAttribute;
+        uint32_t ulSize = xMPURegisters->ulRegionSize;
+        uint32_t ulSizeMask = 2UL << ( xMPURegisters->ulRegionSize >> 1U );
+        uint32_t ulAttributes = xMPURegisters->ulRegionAttribute;
 
         /* Make sure the MPU Region Size is a valid value */
         if( ( ulSize < portMPU_REGION_SIZE_32B ) || ( ulSize > portMPU_REGION_SIZE_4GB ) )
@@ -211,28 +214,30 @@ BaseType_t xPortMPURegisterCheck(
             retVal = pdFAIL;
         }
 
-        /* Unprivileged tasks shall not be granted access to Kernel Code or data. */
-        else if( ( ( ulTaskFlags & portTASK_IS_PRIVILEGED_FLAG ) != portTASK_IS_PRIVILEGED_FLAG ) &&
-                ( ( ( ulBaseAddr < ( uint32_t ) __privileged_data_end__ ) && ( ulBaseAddr >= ( uint32_t ) __privileged_data_start__ ) ) ||
-                  ( ( ulBaseAddr < ( uint32_t ) __privileged_functions_end__ ) && ( ulBaseAddr >= ( uint32_t ) __privileged_functions_start__ ) ) ) )
-
-        {
-            retVal = pdFAIL;
-        }
-
         /* Tasks shall not be granted write access to Function Code.
          * Access Permission 0XX means that writes to the memory location are allowed */
         else if( ( ( ulBaseAddr >= ( uint32_t ) __FLASH_segment_start__ ) && ( ulBaseAddr < ( uint32_t ) __FLASH_segment_end__ ) ) &&
-                 ( ( ulAttributes & portMPU_REGION_AP_BITMASK ) & ( 0x4UL << 8UL ) ) )
+                 ( ( ulAttributes & ( 1UL << 11UL ) ) != ( 1UL << 11UL ) ) )
         {
             retVal = pdFAIL;
         }
-       /* Ensure that tasks are not attempting to mark RAM as an executable code region */
+
+        /* Ensure that tasks are not attempting to mark RAM as an executable code region */
         else if( ( ( ulBaseAddr >= ( uint32_t ) __SRAM_segment_start__ ) && ( ulBaseAddr < ( uint32_t ) __SRAM_segment_end__ ) ) &&
                  ( ( ulAttributes & portMPU_REGION_EXECUTE_NEVER ) != portMPU_REGION_EXECUTE_NEVER ) )
         {
             retVal = pdFAIL;
         }
+
+        /* Unprivileged tasks shall not be granted access to Kernel Code or data. */
+        else if( ( ( ulTaskFlags & portTASK_IS_PRIVILEGED_FLAG ) != portTASK_IS_PRIVILEGED_FLAG ) &&
+                ( ( ( ulBaseAddr < ( uint32_t ) __privileged_data_end__ ) && ( ulBaseAddr >= ( uint32_t ) __privileged_data_start__ ) ) ||
+                  ( ( ulBaseAddr < ( uint32_t ) __privileged_functions_end__ ) && ( ulBaseAddr >= ( uint32_t ) __privileged_functions_start__ ) ) ) )
+        {
+            retVal = pdFAIL;
+        }
+
+        /* Region passed all checks*/
         else
         {
             retVal = pdPASS;
@@ -244,8 +249,7 @@ BaseType_t xPortMPURegisterCheck(
 BaseType_t xPortValidateTaskMPUSettings( xMPU_SETTINGS * xTaskMPUSettings )
 {
     BaseType_t retVal = pdPASS;
-    xMPU_SETTINGS * xMPUSettings = xTaskMPUSettings;
-    if( NULL == xMPUSettings )
+    if( xTaskMPUSettings == NULL )
     {
         retVal = pdFAIL;
     }
@@ -254,12 +258,13 @@ BaseType_t xPortValidateTaskMPUSettings( xMPU_SETTINGS * xTaskMPUSettings )
         uint32_t ulRegionNum = 0UL;
         do
         {
-            retVal = xPortMPURegisterCheck( &xMPUSettings->xRegion[ ulRegionNum ],
-                                            xMPUSettings->ulTaskFlags );
+            retVal = xPortMPURegisterCheck( &xTaskMPUSettings->xRegion[ ulRegionNum ],
+                                            xTaskMPUSettings->ulTaskFlags );
 
             ulRegionNum++;
         } while( (retVal == pdPASS ) && ( ulRegionNum < portTOTAL_NUM_REGIONS_IN_TCB ) );
     }
+
     return retVal;
 }
 
@@ -664,24 +669,6 @@ static void prvSetupMPU( void )
                    ( ulRegionLengthEncoded | portMPU_REGION_ENABLE ),
                    ( portMPU_REGION_PRIV_RO_USER_RO_EXEC |
                      portMPU_REGION_NORMAL_OIWTNOWA_SHARED ) );
-
-    /* Priv: RX, Unpriv: No access for privileged functions. */
-    ulRegionLength = ( uint32_t ) __privileged_functions_end__ - ( uint32_t ) __privileged_functions_start__;
-    ulRegionLengthEncoded = prvGetMPURegionSizeEncoding( ulRegionLength );
-    vMPUSetRegion( portPRIVILEGED_FLASH_REGION,
-                   ( uint32_t ) __privileged_functions_start__,
-                   ( ulRegionLengthEncoded | portMPU_REGION_ENABLE ),
-                   ( portMPU_REGION_PRIV_RO_USER_NA_EXEC |
-                     portMPU_REGION_NORMAL_OIWTNOWA_SHARED ) );
-
-    /* Priv: RW, Unpriv: No Access for privileged data. */
-    ulRegionLength = ( uint32_t ) __privileged_data_end__ - ( uint32_t ) __privileged_data_start__;
-    ulRegionLengthEncoded = prvGetMPURegionSizeEncoding( ulRegionLength );
-    vMPUSetRegion( portPRIVILEGED_RAM_REGION,
-                   ( uint32_t ) __privileged_data_start__,
-                   ( ulRegionLengthEncoded | portMPU_REGION_ENABLE ),
-                   ( portMPU_REGION_PRIV_RW_USER_NA_NOEXEC |
-                     portMPU_REGION_PRIV_RW_USER_NA_NOEXEC ) );
 
     /* Enable the MPU background region - it allows privileged operating modes
      * access to unmapped regions of memory without generating a fault. */
