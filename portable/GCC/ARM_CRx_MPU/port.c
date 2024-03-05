@@ -145,6 +145,125 @@ PRIVILEGED_FUNCTION void vPortExitCritical( void );
 
 /* ----------------------------------------------------------------------------------- */
 
+
+/** @brief Determine if the MPU Register Settings are valid MPU Settings */
+BaseType_t xPortMPURegisterCheck(
+    xMPU_REGION_REGISTERS * xMPURegisters,
+    uint32_t ulTaskFlags
+)
+{
+#if defined( __ARMCC_VERSION )
+    /* Declaration when these variable are defined in code instead of being
+     * exported from linker scripts. */
+    extern uint32_t * __SRAM_segment_start__;
+    extern uint32_t * __SRAM_segment_end__;
+    extern uint32_t * __FLASH_segment_start__;
+    extern uint32_t * __FLASH_segment_end__;
+    extern uint32_t * __privileged_functions_start__;
+    extern uint32_t * __privileged_functions_end__;
+    extern uint32_t * __privileged_data_start__;
+    extern uint32_t * __privileged_data_end__;
+#else
+    /* Declaration when these variable are exported from linker scripts. */
+    extern uint32_t __FLASH_segment_start__[];
+    extern uint32_t __FLASH_segment_end__[];
+    extern uint32_t __SRAM_segment_start__[];
+    extern uint32_t __SRAM_segment_end__[];
+    extern uint32_t __privileged_functions_start__[];
+    extern uint32_t __privileged_functions_end__[];
+    extern uint32_t __privileged_data_start__[];
+    extern uint32_t __privileged_data_end__[];
+#endif /* if defined( __ARMCC_VERSION ) */
+
+    volatile BaseType_t retVal;
+    if( NULL == xMPURegisters )
+    {
+        retVal = pdFAIL;
+        configASSERT( retVal == pdTRUE );
+    }
+    else if( ( xMPURegisters->ulRegionSize & portMPU_REGION_ENABLE ) != portMPU_REGION_ENABLE )
+    {
+        retVal = pdPASS;
+    }
+    else
+    {
+        volatile uint32_t ulBaseAddr = xMPURegisters->ulRegionBaseAddress;
+        /* Bits [5:1] are the MPU Region Size Bits, need to clear the enable bit */
+        volatile uint32_t ulSize = xMPURegisters->ulRegionSize;
+        volatile uint32_t ulSizeMask = 2UL << ( xMPURegisters->ulRegionSize >> 1U );
+        volatile uint32_t ulAttributes = xMPURegisters->ulRegionAttribute;
+
+        /* Make sure the MPU Region Size is a valid value */
+        if( ( ulSize < portMPU_REGION_SIZE_32B ) || ( ulSize > portMPU_REGION_SIZE_4GB ) )
+        {
+            retVal = pdFAIL;
+        }
+
+        /* Make sure that the Region Base Address is aligned to the size of the region */
+        else if( ( ulBaseAddr % ( ulSizeMask ) ) != 0 )
+        {
+            retVal = pdFAIL;
+        }
+
+        /* If using subregions, make sure that the size is larger than 256 bytes */
+        else if( ( ( ulSize & ( 0XFF00UL ) ) && ( ulSize < portMPU_REGION_SIZE_256B ) ) )
+        {
+            retVal = pdFAIL;
+        }
+
+        /* Unprivileged tasks shall not be granted access to Kernel Code or data. */
+        else if( ( ( ulTaskFlags & portTASK_IS_PRIVILEGED_FLAG ) != portTASK_IS_PRIVILEGED_FLAG ) &&
+                ( ( ( ulBaseAddr < ( uint32_t ) __privileged_data_end__ ) && ( ulBaseAddr >= ( uint32_t ) __privileged_data_start__ ) ) ||
+                  ( ( ulBaseAddr < ( uint32_t ) __privileged_functions_end__ ) && ( ulBaseAddr >= ( uint32_t ) __privileged_functions_start__ ) ) ) )
+
+        {
+            retVal = pdFAIL;
+        }
+
+        /* Tasks shall not be granted write access to Function Code.
+         * Access Permission 0XX means that writes to the memory location are allowed */
+        else if( ( ( ulBaseAddr >= ( uint32_t ) __FLASH_segment_start__ ) && ( ulBaseAddr < ( uint32_t ) __FLASH_segment_end__ ) ) &&
+                 ( ( ulAttributes & portMPU_REGION_AP_BITMASK ) & ( 0x4UL << 8UL ) ) )
+        {
+            retVal = pdFAIL;
+        }
+       /* Ensure that tasks are not attempting to mark RAM as an executable code region */
+        else if( ( ( ulBaseAddr >= ( uint32_t ) __SRAM_segment_start__ ) && ( ulBaseAddr < ( uint32_t ) __SRAM_segment_end__ ) ) &&
+                 ( ( ulAttributes & portMPU_REGION_EXECUTE_NEVER ) != portMPU_REGION_EXECUTE_NEVER ) )
+        {
+            retVal = pdFAIL;
+        }
+        else
+        {
+            retVal = pdPASS;
+        }
+    }
+    return retVal;
+}
+
+BaseType_t xPortValidateTaskMPUSettings( xMPU_SETTINGS * xTaskMPUSettings )
+{
+    BaseType_t retVal = pdPASS;
+    xMPU_SETTINGS * xMPUSettings = xTaskMPUSettings;
+    if( NULL == xMPUSettings )
+    {
+        retVal = pdFAIL;
+    }
+    else
+    {
+        uint32_t ulRegionNum = 0UL;
+        do
+        {
+            retVal = xPortMPURegisterCheck( &xMPUSettings->xRegion[ ulRegionNum ],
+                                            xMPUSettings->ulTaskFlags );
+
+            ulRegionNum++;
+        } while( (retVal == pdPASS ) && ( ulRegionNum < portTOTAL_NUM_REGIONS_IN_TCB ) );
+    }
+    return retVal;
+}
+
+
 /**
  * @brief Setup a FreeRTOS task's initial context.
  *
@@ -167,6 +286,7 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
 {
     /* Setup the initial context of the task. The context is set exactly as
      * expected by the portRESTORE_CONTEXT() macro. */
+
     UBaseType_t ulIndex = CONTEXT_SIZE - 1U;
 
     xSYSTEM_CALL_STACK_INFO * xSysCallInfo = NULL;
@@ -192,6 +312,10 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
     }
 
     ulIndex--;
+
+    /* Ensure per-task MPU Settings are valid */
+    volatile BaseType_t retVal = xPortValidateTaskMPUSettings( xMPUSettings );
+    configASSERT( retVal == pdTRUE );
 
     xMPUSettings->ulContext[ ulIndex ] = ( StackType_t ) pxCode; /* PC. */
     ulIndex--;
