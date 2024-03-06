@@ -124,9 +124,10 @@ extern "C" {
 
 /* Default MPU regions. */
 #define portFIRST_CONFIGURABLE_REGION ( 0 )
-#define portLAST_CONFIGURABLE_REGION  ( portMPU_TOTAL_REGIONS - 3UL )
-#define portSTACK_REGION              ( portMPU_TOTAL_REGIONS - 2UL )
-#define portUNPRIVILEGED_FLASH_REGION ( portMPU_TOTAL_REGIONS - 1UL )
+#define portLAST_CONFIGURABLE_REGION  ( portMPU_TOTAL_REGIONS - 4UL )
+#define portSTACK_REGION              ( portMPU_TOTAL_REGIONS - 3UL )
+#define portUNPRIVILEGED_FLASH_REGION ( portMPU_TOTAL_REGIONS - 2UL )
+#define portPRIVILEGED_FLASH_REGION   ( portMPU_TOTAL_REGIONS - 1UL )
 #define portNUM_CONFIGURABLE_REGIONS \
     ( ( portLAST_CONFIGURABLE_REGION - portFIRST_CONFIGURABLE_REGION ) + 1UL )
 /* Plus one to make space for the stack region. */

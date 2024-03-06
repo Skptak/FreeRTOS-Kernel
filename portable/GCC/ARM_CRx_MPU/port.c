@@ -149,10 +149,8 @@ PRIVILEGED_FUNCTION void vPortExitCritical( void );
 /**
  * @brief Determine if the MPU Register Settings are valid MPU Settings
  */
-BaseType_t xPortMPURegisterCheck(
-    xMPU_REGION_REGISTERS * xMPURegisters,
-    uint32_t ulTaskFlags
-)
+BaseType_t xPortMPURegisterCheck( xMPU_REGION_REGISTERS * xMPURegisters,
+                                  uint32_t ulTaskFlags )
 {
 #if defined( __ARMCC_VERSION )
     /* Declaration when these variable are defined in code instead of being
@@ -668,6 +666,15 @@ static void prvSetupMPU( void )
                    ( uint32_t ) __FLASH_segment_start__,
                    ( ulRegionLengthEncoded | portMPU_REGION_ENABLE ),
                    ( portMPU_REGION_PRIV_RO_USER_RO_EXEC |
+                     portMPU_REGION_NORMAL_OIWTNOWA_SHARED ) );
+
+    /* Priv: RX, Unpriv: No access for privileged functions. */
+    ulRegionLength = ( uint32_t ) __privileged_functions_end__ - ( uint32_t ) __privileged_functions_start__;
+    ulRegionLengthEncoded = prvGetMPURegionSizeEncoding( ulRegionLength );
+    vMPUSetRegion( portPRIVILEGED_FLASH_REGION,
+                   ( uint32_t ) __privileged_functions_start__,
+                   ( ulRegionLengthEncoded | portMPU_REGION_ENABLE ),
+                   ( portMPU_REGION_PRIV_RO_USER_NA_EXEC |
                      portMPU_REGION_NORMAL_OIWTNOWA_SHARED ) );
 
     /* Enable the MPU background region - it allows privileged operating modes
