@@ -107,7 +107,7 @@
     LDR     LR, [LR]            /* LR = pxTopOfStack i.e. the address where to restore the task context from. */
 
     /* When creating a loop label in a macro it has to be a numeric label.
-     * for( R5 = portFIRST_CONFIGURABLE_REGION ; R5 <= portNUM_CONFIGURABLE_REGIONS ; R5++ ) */
+     * for( R5 = portFIRST_CONFIGURABLE_REGION ; R5 <= portLAST_CONFIGURABLE_REGION ; R5++ ) */
     MOV     R5, #portFIRST_CONFIGURABLE_REGION
     123:
         LDMIA   R1!, { R2-R4 }  /* R2 = ulRegionSize, R3 = ulRegionAttribute, R4 = ulRegionBaseAddress. */
@@ -118,8 +118,16 @@
         MCR     p15, #0, R2, c6, c1, #2 /* MPU Region Size and Enable Register. */
 
         ADD     R5, R5, #1
-        CMP     R5, #portNUM_CONFIGURABLE_REGIONS
+        CMP     R5, #portLAST_CONFIGURABLE_REGION
         BLE     123b
+
+    /* Now set the port stack region as the highest priority region */
+    LDMIA   R1!, { R2-R4 }  /* R2 = ulRegionSize, R3 = ulRegionAttribute, R4 = ulRegionBaseAddress. */
+    MOV     R5, #portSTACK_REGION
+    MCR     p15, #0, R5, c6, c2, #0 /* MPU Region Number Register. */
+    MCR     p15, #0, R4, c6, c1, #0 /* MPU Region Base Address Register. */
+    MCR     p15, #0, R3, c6, c1, #4 /* MPU Region Access Control Register. */
+    MCR     p15, #0, R2, c6, c1, #2 /* MPU Region Size and Enable Register. */
 
     LDR     R1, =ulCriticalNesting /* R1 = &( ulCriticalNesting ). */
     LDM     LR!, { R2 }            /* R2 = Stored ulCriticalNesting. */
@@ -233,6 +241,43 @@ svcSystemCallExit:
 
     LDMDB   R11, { R12 }        /* R12 = ulTaskFlags. */
 
+#if 0
+    PUSH    { R0-R6 }           /* Save Scratch Registers */
+    SUB     R0, R11, #0x18      /* R0 = pxCurrentTCB->xMPUSettings->xRegion[portSTACK_REGION] */
+    LDR     R11, [R11, #0x8]    /* R11 = pxCurrentTCB->xMPUSettings->xSystemCallStackInfo->pxSystemCallStack->xMPUSettings */
+
+    LDM     R0, {R1-R3}     /* Load MPU values for the System Call Stack into R1-R3 */
+    LDM     R11, {R4-R6}    /* Load MPU values for the Task Stack into R4-R6 */
+    STM     R0, {R4-R6}     /* Save the System Call Stack MPU Settings into pxCurrentTCB->xMPUSettings->xSystemCallStackInfo->pxSystemCallStack->xMPUSettings */
+    STM     R11, {R1-R3}    /* Save the Task Stack MPU Settings into pxCurrentTCB->xMPUSettings->xRegion[portSTACK_REGION] */
+
+    MOV     R12, #portSTACK_REGION      /* Select the Task Stack MPU Region. */
+    MCR     p15, #0, R12, c6, c2, #0    /* MPU Region Number Register. */
+    MCR     p15, #0, R4, c6, c1, #2     /* MPU Region Size and Enable Register. */
+    MCR     p15, #0, R5, c6, c1, #4     /* MPU Region Access Control Register. */
+    MCR     p15, #0, R6, c6, c1, #0     /* MPU Region Base Address Register. */
+
+    POP     { R0-R6 }   /* Restore used registers */
+#endif
+#if 0
+    STR     R12, [R10, #0x00]
+    STR     R12, [R10, #0x28]
+
+    LDR     R12, [R10, #0x04]   /* R11 = pxCurrentTCB->xMPUSettings->xRegion[portSTACK_REGION].ulRegionAttribute */
+    LDR     R12, [R10, #0x04]   /* R12 = pxCurrentTCB->xMPUSettings->xSystemCallStackInfo->pxSystemCallStack->xMPUSettings->ulRegionAttribute */
+    MCR     p15, #0, R12, c6, c1, #4    /* MPU Region Access Control Register. */
+
+    STR     R12, [R10, #0x04]
+    STR     R11, [R10, #0x04]
+
+    LDR     R11, [R10, #0x08]   /* R11 = pxCurrentTCB->xMPUSettings->xRegion[portSTACK_REGION].ulRegionBaseAddress */
+    LDR     R12, [R10, #0x08]   /* R12 = pxCurrentTCB->xMPUSettings->xSystemCallStackInfo->pxSystemCallStack->xMPUSettings->ulRegionBaseAddress */
+    MCR     p15, #0, R12, c6, c1, #0    /* MPU Region Base Address Register. */
+
+    STR     R12, [R10, #0x08]
+    STR     R11, [R10, #0x08]
+#endif
+
     TST     R12, #portTASK_IS_PRIVILEGED_FLAG
     /* If the task is privileged, we can exit now. */
     BNE     svcHandlerExit
@@ -271,6 +316,48 @@ svcSystemCallEnter:
      * and xSystemCallStackInfo.pulSystemCallExitAddress. */
     LDM     R11, { R13-R14 }^
 
+#if 0
+    PUSH    { R0-R6 }           /* Save Scratch Registers */
+    SUB     R0, R11, #0x18      /* R0 = pxCurrentTCB->xMPUSettings->xRegion[portSTACK_REGION] */
+    LDR     R11, [R11, #0x8]    /* R11 = pxCurrentTCB->xMPUSettings->xSystemCallStackInfo->pxSystemCallStack->xMPUSettings */
+
+    LDM     R0, {R1-R3}     /* Load MPU values for the Task Stack into R1-R3 */
+    LDM     R11, {R4-R6}    /* Load MPU values for the System Call Stack into R4-R6 */
+    STM     R0, {R4-R6}     /* Save the Task Stack MPU Settings into pxCurrentTCB->xMPUSettings->xSystemCallStackInfo->pxSystemCallStack->xMPUSettings */
+    STM     R11, {R1-R3}    /* Save the System Call Stack MPU Settings into pxCurrentTCB->xMPUSettings->xRegion[portSTACK_REGION] */
+
+    MOV     R12, #portSTACK_REGION      /* Use Task Stack MPU Region for System Call Stack. */
+    MCR     p15, #0, R12, c6, c2, #0    /* MPU Region Number Register. */
+    MCR     p15, #0, R4, c6, c1, #2     /* MPU Region Size and Enable Register. */
+    MCR     p15, #0, R5, c6, c1, #4     /* MPU Region Access Control Register. */
+    MCR     p15, #0, R6, c6, c1, #0     /* MPU Region Base Address Register. */
+
+    POP     { R0-R6 }   /* Restore used registers */
+#endif
+#if 0
+
+    /* I'm not sure if this is a thing that works the way I'd expect? ARM manual says
+     * that these instructions replaced SWP, which does a "Swap Register value with RAM"
+     * but it seems like this is just for ensuring an atomic read of a value? */
+    STREX   R12, R11, [R10] /* R11 = pxCurrentTCB->xMPUSettings->xRegion[portSTACK_REGION].ulRegionSize */
+    LDREX   R12, [R11]  /* R12 = pxCurrentTCB->xMPUSettings->xSystemCallStackInfo->pxSystemCallStack->xMPUSettings->ulRegionSize */
+    STR     R12, [R10, #0x00]
+    STR     R11, [R10, #0x28]
+
+    LDR     R11, [R10, #0x04]   /* R11 = pxCurrentTCB->xMPUSettings->xRegion[portSTACK_REGION].ulRegionAttribute */
+    LDR     R12, [R10, #0x2C]   /* R12 = pxCurrentTCB->xMPUSettings->xSystemCallStackInfo->pxSystemCallStack->xMPUSettings->ulRegionAttribute */
+    MCR     p15, #0, R12, c6, c1, #4    /* MPU Region Access Control Register. */
+
+    STR     R12, [R10, #0x04]
+    STR     R11, [R10, #0x2C]
+
+    LDR     R11, [R10, #0x08]   /* R11 = pxCurrentTCB->xMPUSettings->xRegion[portSTACK_REGION].ulRegionBaseAddress */
+    LDR     R12, [R10, #0x30]   /* R12 = pxCurrentTCB->xMPUSettings->xSystemCallStackInfo->pxSystemCallStack->xMPUSettings->ulRegionBaseAddress */
+    MCR     p15, #0, R12, c6, c1, #0    /* MPU Region Base Address Register. */
+
+    STR     R12, [R10, #0x08]
+    STR     R11, [R10, #0x30]
+#endif
     /* Change to SYS_MODE for the System Call. */
     MRS     R12, SPSR
     ORR     R12, R12, #SYS_MODE
