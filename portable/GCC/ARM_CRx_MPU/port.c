@@ -147,17 +147,19 @@ PRIVILEGED_FUNCTION void vPortExitCritical( void );
 
 #define portCALL_STACK_IN_USE_FLAG      ( 1UL << 0UL )
 #define portPRIV_CALL_STACK_MPU_ATTR    portMPU_REGION_PRIV_RO_USER_NA_NOEXEC   \
-                                        | portMPU_REGION_NORMAL_OIWTNOWA_SHARED \
-                                        | portMPU_SUBREGION_1_DISABLE           \
-                                        | portMPU_SUBREGION_1_DISABLE           \
-                                        | portMPU_SUBREGION_2_DISABLE           \
-                                        | portMPU_SUBREGION_3_DISABLE           \
-                                        | portMPU_SUBREGION_4_DISABLE           \
-                                        | portMPU_SUBREGION_5_DISABLE           \
+                                        | portMPU_REGION_NORMAL_OIWTNOWA_SHARED
+
+#define portPRIV_CALL_STACK_SUBREGIONS  portMPU_REGION_ENABLE           \
+                                        | portMPU_SUBREGION_1_DISABLE   \
+                                        | portMPU_SUBREGION_2_DISABLE   \
+                                        | portMPU_SUBREGION_3_DISABLE   \
+                                        | portMPU_SUBREGION_4_DISABLE   \
+                                        | portMPU_SUBREGION_5_DISABLE   \
                                         | portMPU_SUBREGION_6_DISABLE
 
+
 PRIVILEGED_DATA xSYSTEM_CALL_STACK_BUFFER
-    pxPrivilegedCallStacks[ configMAX_CONCURRENT_UNPRIVILEGED_TASKS + 2UL ]
+    pxPrivilegedCallStacks[ configMAX_CONCURRENT_UNPRIVILEGED_TASKS ]
     __attribute__( ( aligned( ( configSYSTEM_CALL_STACK_SIZE ) * 0x4U ) ) ) = { 0 };
 
 PRIVILEGED_FUNCTION static xSYSTEM_CALL_STACK_BUFFER * prvGetUnusedCallStack( void )
@@ -190,6 +192,7 @@ PRIVILEGED_FUNCTION static xSYSTEM_CALL_STACK_BUFFER * prvGetUnusedCallStack( vo
 
     /* Enable interrupts now that the call stack has been found */
     vPortExitCritical();
+
 
     return pxCallStackPtr;
 }
@@ -353,7 +356,7 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
 
     /* The task will start with a critical nesting count of 0. */
     xMPUSettings->ulContext[ ulIndex ] = portNO_CRITICAL_NESTING;
-
+#if 0
     /* Ensure that the system call stack is double word aligned. */
     xSYSTEM_CALL_STACK_INFO * xSysCallInfo = &( xMPUSettings->xSystemCallStackInfo );
     xSysCallInfo->pulSystemCallStackPointer = &( xSysCallInfo->ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE - 1U ] );
@@ -366,11 +369,12 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
     /* Set the System Call to return to vPortSystemCallExit. */
     xSysCallInfo->pulSystemCallExitAddress = ( uint32_t * ) ( &vPortSystemCallExit );
 
-#if 0
+#else
     if( xRunPrivileged != pdTRUE )
     {
         /* Get an available privileged call stack buffer */
         xSYSTEM_CALL_STACK_BUFFER * pxCallStackPtr = prvGetUnusedCallStack();
+
 
         /* If ulCallStack is NULL, there are no available call stack buffers to use */
         configASSERT( NULL != pxCallStackPtr );
@@ -378,21 +382,29 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
         /* Check to make sure the call stack is properly cleared out. */
         configASSERT( pxCallStackPtr->ulSystemCallStackBuffer[ 0 ] == 0UL );
 
-        /* Set the Region Size of the privileged call stack */
-        pxCallStackPtr->xMPUSettings.ulRegionSize = prvGetMPURegionSizeEncoding( ( ( uint32_t ) configSYSTEM_CALL_STACK_SIZE ) * 4UL )
-                                                             | portMPU_REGION_ENABLE;
+        uint32_t ulRegionSize = prvGetMPURegionSizeEncoding( ( ( uint32_t ) configSYSTEM_CALL_STACK_SIZE ) * 4UL );
+        uint32_t ulBaseAddr = ( uint32_t ) pxCallStackPtr;
 
-        /* Set an MPU Region around the Call Stack that would cause writes to it to fail.
-         * Then disable this region except for the first and last 8th of the stack. */
+        /* Ensure the pxCallStackPtr is aligned to the size of the MPU Region. */
+        configASSERT( ( ulBaseAddr % ( 2UL << ( ulRegionSize >> 1UL ) ) ) == 0UL );
+
+        ulRegionSize |= portPRIV_CALL_STACK_SUBREGIONS;
+
+        /* Set an MPU Region that does not allow privileged operating mode writes.
+         * Then allow writes to the middle of it by disabling the region. */
+        pxCallStackPtr->xMPUSettings.ulRegionSize = ulRegionSize;
         pxCallStackPtr->xMPUSettings.ulRegionAttribute = ( uint32_t ) portPRIV_CALL_STACK_MPU_ATTR;
-        pxCallStackPtr->xMPUSettings.ulRegionBaseAddress = ( uint32_t ) pxCallStackPtr;
+        pxCallStackPtr->xMPUSettings.ulRegionBaseAddress = ulBaseAddr;
 
         /* Assign the call stack to the task. */
         xMPUSettings->xSystemCallStackInfo.pxSystemCallStack = pxCallStackPtr;
 
         /* Set the call stack to start after the subregion that doesn't allow writes.
-         * This also ensures the stack pointer has double word alignment. */
-        xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer = &( pxCallStackPtr->ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE - ( 5 +  ( configSYSTEM_CALL_STACK_SIZE / 8UL ) ) ] );
+         * Account for buffer being 4 words shorter, then add additional two words to
+         *  ensures the stack pointer has double word alignment. */
+        uint32_t ulIndexOffset = ( configSYSTEM_CALL_STACK_SIZE / 8UL ) + 6UL;
+        ulIndexOffset = configSYSTEM_CALL_STACK_SIZE - ulIndexOffset;
+        xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer = &( pxCallStackPtr->ulSystemCallStackBuffer[ ulIndexOffset ] );
 
         /* This is not NULL only for the duration of a system call. */
         xMPUSettings->xSystemCallStackInfo.pulTaskStackPointer = NULL;
@@ -732,16 +744,29 @@ BaseType_t xPortIsAuthorizedToAccessBuffer( const void * pvBuffer,
         }
         else
         {
-            for( ulRegionIndex = 0x0UL; ulRegionIndex < portTOTAL_NUM_REGIONS_IN_TCB; ulRegionIndex++ )
+            /* The pulTaskStackPointer is only NOT null for the duration of a system call */
+            if( xTaskMPUSettings->xSystemCallStackInfo.pulTaskStackPointer != NULL )
             {
-                xAccessGranted = prvMPURegionAuthorizesBuffer( &( xTaskMPUSettings->xRegion[ ulRegionIndex ] ),
-                                                               ( uint32_t ) pvBuffer,
-                                                               ulBufferLength,
-                                                               ulAccessRequested );
+                /* After making a system call the Task Stack region shall be stored in the pxSystemCallStack */
+                xAccessGranted = prvMPURegionAuthorizesBuffer( &( xTaskMPUSettings->xSystemCallStackInfo.pxSystemCallStack->xMPUSettings ),
+                                                                           ( uint32_t ) pvBuffer,
+                                                                           ulBufferLength,
+                                                                           ulAccessRequested );
+            }
 
-                if( xAccessGranted == pdTRUE )
+            if( xAccessGranted != pdTRUE )
+            {
+                for( ulRegionIndex = 0x0UL; ulRegionIndex < portTOTAL_NUM_REGIONS_IN_TCB; ulRegionIndex++ )
                 {
-                    break;
+                    xAccessGranted = prvMPURegionAuthorizesBuffer( &( xTaskMPUSettings->xRegion[ ulRegionIndex ] ),
+                                                                   ( uint32_t ) pvBuffer,
+                                                                   ulBufferLength,
+                                                                   ulAccessRequested );
+
+                    if( xAccessGranted == pdTRUE )
+                    {
+                        break;
+                    }
                 }
             }
         }

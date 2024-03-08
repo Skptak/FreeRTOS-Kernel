@@ -475,7 +475,7 @@ typedef struct SYSTEM_CALL_STACK_BUFFER
 {
     xMPU_REGION_REGISTERS xMPUSettings; /**< MPU settings used by the privileged call stack */
     uint32_t ulSystemCallStackFlags; /**< Flags used to track info about the system call stack. */
-    uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE - 5UL ]; /**< Buffer to be used as stack when performing a FreeRTOS System Call. */
+    uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE - 4UL ]; /**< Buffer to be used as stack when performing a FreeRTOS System Call. */
 } xSYSTEM_CALL_STACK_BUFFER;
 /**
  * @brief Structure to hold per-task System Call Stack information.
@@ -493,9 +493,9 @@ typedef struct SYSTEM_CALL_STACK_INFO
     uint32_t * pulLinkRegisterAtSystemCallEntry; /**< Link Register of the task when it made a FreeRTOS System Call. */
     uint32_t * pulSystemCallStackPointer; /**< Stack Pointer to use for executing a FreeRTOS System Call. */
     uint32_t * pulSystemCallExitAddress; /**< System call exit address. */
-    uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ]; /**< Buffer to be used as stack when performing a FreeRTOS System Call. */
-
 #if 0
+    uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ]; /**< Buffer to be used as stack when performing a FreeRTOS System Call. */
+#else
     xSYSTEM_CALL_STACK_BUFFER * pxSystemCallStack; /**< Buffer to be used as stack when performing a FreeRTOS System Call. */
 #endif
 
