@@ -493,12 +493,7 @@ typedef struct SYSTEM_CALL_STACK_INFO
     uint32_t * pulLinkRegisterAtSystemCallEntry; /**< Link Register of the task when it made a FreeRTOS System Call. */
     uint32_t * pulSystemCallStackPointer; /**< Stack Pointer to use for executing a FreeRTOS System Call. */
     uint32_t * pulSystemCallExitAddress; /**< System call exit address. */
-#if 0
-    uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ]; /**< Buffer to be used as stack when performing a FreeRTOS System Call. */
-#else
     xSYSTEM_CALL_STACK_BUFFER * pxSystemCallStack; /**< Buffer to be used as stack when performing a FreeRTOS System Call. */
-#endif
-
 } xSYSTEM_CALL_STACK_INFO;
 
 /**

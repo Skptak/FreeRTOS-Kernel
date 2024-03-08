@@ -170,29 +170,27 @@ PRIVILEGED_FUNCTION static xSYSTEM_CALL_STACK_BUFFER * prvGetUnusedCallStack( vo
 
     /* Ensure we are not interrupted while finding and choosing the call stack */
     vPortEnterCritical();
-
-    /* Loop through the privileged call stack array */
-    do
     {
-        pxCallStackPtr = &pxPrivilegedCallStacks[ulArrayIdx];
-
-        /* If the bit is low, the index is not in use */
-        if( ( pxCallStackPtr->ulSystemCallStackFlags & portCALL_STACK_IN_USE_FLAG ) != portCALL_STACK_IN_USE_FLAG )
+        /* Loop through the privileged call stack array */
+        do
         {
-            /* Found an available slot, set the call stack array as in use */
-            pxCallStackPtr->ulSystemCallStackFlags |= portCALL_STACK_IN_USE_FLAG;
+            pxCallStackPtr = &pxPrivilegedCallStacks[ulArrayIdx];
 
-            retVal = pdTRUE;
-        }
+            /* If the bit is low, the index is not in use */
+            if( ( pxCallStackPtr->ulSystemCallStackFlags & portCALL_STACK_IN_USE_FLAG ) != portCALL_STACK_IN_USE_FLAG )
+            {
+                /* Found an available slot, set the call stack array as in use */
+                pxCallStackPtr->ulSystemCallStackFlags |= portCALL_STACK_IN_USE_FLAG;
 
-        ulArrayIdx++;
+                retVal = pdTRUE;
+            }
 
-    } while( ( ulArrayIdx < configMAX_CONCURRENT_UNPRIVILEGED_TASKS ) &&
-             ( retVal == pdFALSE ) );
+            ulArrayIdx++;
 
-    /* Enable interrupts now that the call stack has been found */
+        } while( ( ulArrayIdx < configMAX_CONCURRENT_UNPRIVILEGED_TASKS ) &&
+                ( retVal == pdFALSE ) );
+    }
     vPortExitCritical();
-
 
     return pxCallStackPtr;
 }
@@ -356,25 +354,11 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
 
     /* The task will start with a critical nesting count of 0. */
     xMPUSettings->ulContext[ ulIndex ] = portNO_CRITICAL_NESTING;
-#if 0
-    /* Ensure that the system call stack is double word aligned. */
-    xSYSTEM_CALL_STACK_INFO * xSysCallInfo = &( xMPUSettings->xSystemCallStackInfo );
-    xSysCallInfo->pulSystemCallStackPointer = &( xSysCallInfo->ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE - 1U ] );
-    xSysCallInfo->pulSystemCallStackPointer = ( uint32_t * ) ( ( ( uint32_t ) ( xSysCallInfo->pulSystemCallStackPointer ) ) &
-                                                               ( ( uint32_t ) ( ~( portBYTE_ALIGNMENT_MASK ) ) ) );
 
-    /* This is not NULL only for the duration of a system call. */
-    xSysCallInfo->pulTaskStackPointer = NULL;
-
-    /* Set the System Call to return to vPortSystemCallExit. */
-    xSysCallInfo->pulSystemCallExitAddress = ( uint32_t * ) ( &vPortSystemCallExit );
-
-#else
     if( xRunPrivileged != pdTRUE )
     {
         /* Get an available privileged call stack buffer */
         xSYSTEM_CALL_STACK_BUFFER * pxCallStackPtr = prvGetUnusedCallStack();
-
 
         /* If ulCallStack is NULL, there are no available call stack buffers to use */
         configASSERT( NULL != pxCallStackPtr );
@@ -401,7 +385,7 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
 
         /* Set the call stack to start after the subregion that doesn't allow writes.
          * Account for buffer being 4 words shorter, then add additional two words to
-         *  ensures the stack pointer has double word alignment. */
+         * ensures the stack pointer has double word alignment. */
         uint32_t ulIndexOffset = ( configSYSTEM_CALL_STACK_SIZE / 8UL ) + 6UL;
         ulIndexOffset = configSYSTEM_CALL_STACK_SIZE - ulIndexOffset;
         xMPUSettings->xSystemCallStackInfo.pulSystemCallStackPointer = &( pxCallStackPtr->ulSystemCallStackBuffer[ ulIndexOffset ] );
@@ -411,9 +395,7 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
 
         /* Set the System Call to return to vPortSystemCallExit. */
         xMPUSettings->xSystemCallStackInfo.pulSystemCallExitAddress = ( uint32_t * ) ( &vPortSystemCallExit );
-
     }
-#endif
 
     /* Return the address where this task's context should be restored from. */
     return &( xMPUSettings->ulContext[ ulIndex ] );

@@ -248,7 +248,6 @@ svcSystemCallExit:
     BIC     R12, R12, #0x0F
     MSR     SPSR_cxsf, R12
 
-#if 1
     PUSH    { R0-R5 }           /* Save Scratch Registers */
     SUB     R12, R11, #0x10     /* R12 = pxCurrentTCB->xMPUSettings->xRegion[portSTACK_REGION] */
     LDR     R11, [R11, #-0x8]   /* R11 = pxCurrentTCB->xMPUSettings->xSystemCallStackInfo->pxSystemCallStack->xMPUSettings */
@@ -263,13 +262,11 @@ svcSystemCallExit:
     MCR     p15, #0, R4, c6, c1, #4     /* MPU Region Access Control Register. */
     MCR     p15, #0, R5, c6, c1, #0     /* MPU Region Base Address Register. */
 
-    STMIA  R11!, {R0-R2}    /* Save the System Call Stack MPU Settings into pxCurrentTCB->xMPUSettings->xSystemCallStackInfo->pxSystemCallStack->xMPUSettings */
-
-
+    /* Save the System Call Stack MPU Settings into
+     * pxCurrentTCB->xMPUSettings->xSystemCallStackInfo->pxSystemCallStack->xMPUSettings */
+    STMIA  R11!, {R0-R2}
 
     POP     { R0-R5 }   /* Restore used registers */
-#endif
-
 
     B   svcHandlerExit
 
@@ -301,7 +298,6 @@ svcSystemCallEnter:
      * and xSystemCallStackInfo.pulSystemCallExitAddress. */
     LDM     R11, { R13-R14 }^
 
-#if 1
     PUSH    { R0-R5 }           /* Save Scratch Registers */
     SUB     R12, R11, #0x18     /* R12 = pxCurrentTCB->xMPUSettings->xRegion[portSTACK_REGION] */
     LDR     R11, [R11, #0x8]    /* R11 = pxCurrentTCB->xMPUSettings->xSystemCallStackInfo->pxSystemCallStack->xMPUSettings */
@@ -318,7 +314,7 @@ svcSystemCallEnter:
     MCR     p15, #0, R5, c6, c1, #0     /* MPU Region Base Address Register. */
 
     POP     { R0-R5 }   /* Restore used registers */
-#endif
+
     /* Change to SYS_MODE for the System Call. */
     MRS     R12, SPSR
     ORR     R12, R12, #SYS_MODE
