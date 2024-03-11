@@ -157,6 +157,14 @@ PRIVILEGED_FUNCTION void vPortExitCritical( void );
                                         | portMPU_SUBREGION_5_DISABLE   \
                                         | portMPU_SUBREGION_6_DISABLE
 
+/* Proposed config to do the call stack. Would need to add in something for vTaskDelete()
+ * to clear out the call stack and mark ulSystemCallStackFlags as not in use.
+ * It also only makes sense to do this if the config isn't set for dynamic allocation.
+ * Since if dynamic allocation is being used the call stack could just be malloc'd at
+ * double its size to ensure it can be aligned to its size. */
+#ifndef configMAX_CONCURRENT_UNPRIVILEGED_TASKS
+    #define configMAX_CONCURRENT_UNPRIVILEGED_TASKS 16UL
+#endif /* configMAX_CONCURRENT_UNPRIVILEGED_TASKS */
 
 PRIVILEGED_DATA xSYSTEM_CALL_STACK_BUFFER
     pxPrivilegedCallStacks[ configMAX_CONCURRENT_UNPRIVILEGED_TASKS ]
