@@ -516,6 +516,11 @@ portDONT_DISCARD void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) PRIV
  */
 PRIVILEGED_DATA static volatile uint32_t ulCriticalNesting = 0xaaaaaaaaUL;
 
+/**
+ * @brief Stack to use when an un-recoverable error occurs.
+ */
+PRIVILEGED_DATA StackType_t ulExceptionStack[configEXCEPTION_STACK_SIZE] = { 0UL };
+
 #if ( configENABLE_TRUSTZONE == 1 )
 
 /**
@@ -1151,6 +1156,43 @@ void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) /* PRIVILEGED_FUNCTIO
                     break;
             #endif /* configENABLE_MPU == 1 */
 
+        case (SYSTEM_CALL_vSafeAssert):
+            /* Disable the MPU. */
+            portMPU_CTRL_REG ^= portMPU_ENABLE_BIT;
+
+            /* Ensure interrupts are disabled. */
+            portDISABLE_INTERRUPTS();
+
+            /* Load stack used for unrecoverable faults.  */
+            __asm volatile (
+                " .extern ulExceptionStack  \n"
+                " .syntax unified           \n"
+                " ldr r0, =ulExceptionStack \n"
+                " ldr r1, =%0               \n"
+                " add r0, r1                \n" /* r0 = ulExceptionStack[configEXCEPTION_STACK_SIZE]. */
+                " mov sp, r0                \n" /* SP = ulExceptionStack[configEXCEPTION_STACK_SIZE]. */
+                : /* No outputs. */
+                : "i" ( configEXCEPTION_STACK_SIZE << 2)
+                : "r0", "r1", "memory"
+            );
+
+            xFrKSafeAssertFaultInfo pxKernelAssertInfo = { 0 };
+            pxKernelAssertInfo.faultFile = ( char * ) pulCallerStackAddress[0];
+            pxKernelAssertInfo.faultFunction =  ( const char * ) pulCallerStackAddress[1];
+            pxKernelAssertInfo.faultLine = pulCallerStackAddress[2];
+            pxKernelAssertInfo.errCode = pulCallerStackAddress[3];
+
+            /* Call user assert handler. */
+            vApplicationSafeAssertCallback ( &pxKernelAssertInfo, NULL ) ;
+
+            /* Should never return. */
+            portDISABLE_INTERRUPTS();
+
+            while ( 1 )
+            {
+                portNOP();
+            }
+
         default:
             /* Incorrect SVC call. */
             configASSERT( pdFALSE );
@@ -1737,6 +1779,9 @@ BaseType_t xPortStartScheduler( void ) /* PRIVILEGED_FUNCTION */
     portNVIC_SHPR3_REG |= portNVIC_PENDSV_PRI;
     portNVIC_SHPR3_REG |= portNVIC_SYSTICK_PRI;
     portNVIC_SHPR2_REG = 0;
+
+    configASSERT( ulExceptionStack != NULL );
+    safeASSERT( configEXCEPTION_STACK_SIZE % 2 == 0U );
 
     #if ( configENABLE_MPU == 1 )
     {

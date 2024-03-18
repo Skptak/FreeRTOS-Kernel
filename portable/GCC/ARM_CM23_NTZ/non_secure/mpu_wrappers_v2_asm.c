@@ -44,7 +44,58 @@
 #undef MPU_WRAPPERS_INCLUDED_FROM_API_FILE
 /*-----------------------------------------------------------*/
 
+
 #if ( ( configENABLE_MPU == 1 ) && ( configUSE_MPU_WRAPPERS_V1 == 0 ) )
+#if 0
+    void MPU_vSafeAssertError( char * faultFile,
+                               char * faultFunction,
+                               size_t faultLine,
+                               uint32_t errCode ) __attribute__( ( naked ) ) FREERTOS_SYSTEM_CALL;
+#endif
+    void MPU_vSafeAssertError( char * pcFile,
+                               const char * pcFunc,
+                               int ulLine,
+                               uint32_t errCode )
+    {
+        __asm volatile
+        (
+            " .syntax unified                                       \n"
+            " svc %0                                                \n"
+            "                                                       \n"
+            : : "i" ( SYSTEM_CALL_vSafeAssert ) : "memory"
+        );
+        portDISABLE_INTERRUPTS();
+        while(1){
+            portNOP();
+        }
+    }
+
+    void * MPU_xPrivilegedCallback( void * xPrivilegedParameters )  __attribute__( ( naked ) ) FREERTOS_SYSTEM_CALL;
+
+    void * MPU_xPrivilegedCallback( void * xPrivilegedParameters ) /*  __attribute__( ( naked ) ) FREERTOS_SYSTEM_CALL */
+    {
+        __asm volatile
+        (
+            " .syntax unified                                       \n"
+            " .extern xApplicationPrivilegedCallback                \n"
+            "                                                       \n"
+            " push {r0, r1}                                         \n"
+            " mrs r0, control                                       \n"
+            " movs r1, #1                                           \n"
+            " tst r0, r1                                            \n"
+            " pop {r0, r1}                                          \n"
+            " bne MPU_xPrivilegedCallback_Unpriv                    \n"
+            " MPU_xPrivilegedCallback_Priv:                         \n"
+            "     push {lr}                                         \n"
+            "     blx xApplicationPrivilegedCallback                \n"
+            "     pop {pc}                                          \n"
+            " MPU_xPrivilegedCallback_Unpriv:                       \n"
+            "     svc %0                                            \n"
+            "                                                       \n"
+            : : "i" ( SYSTEM_CALL_xPrivilegedCallback ) : "memory"
+        );
+    }
+
 
     #if ( INCLUDE_xTaskDelayUntil == 1 )
 

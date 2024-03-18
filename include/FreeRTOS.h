@@ -356,6 +356,38 @@
     #error configMAX_TASK_NAME_LEN must be set to a minimum of 1 in FreeRTOSConfig.h
 #endif
 
+/**
+ * @brief Info populated when the FreeRTOS-Kernel throws a safeASSERT(ERROR)
+ */
+typedef struct FREERTOS_KERNEL_SAFE_ASSERT_FAULT_INFO
+{
+    char * faultFile;       /* File where a FREERTOS_ASSERT() was thrown */
+    const char * faultFunction;   /* Function where a FREERTOS_ASSERT() was thrown */
+    int faultLine;          /* Line where a FREERTOS_ASSERT() was thrown */
+    uint32_t errCode;       /* Error code related to why the FREERTOS_ASSERT was thrown */
+} xFrKSafeAssertFaultInfo;
+
+/* Declaration for the Port-Specific safeASSERT() failure function. */
+void MPU_vSafeAssertError( char * pcFile,
+                           const char * pcFunc,
+                           int ulLine,
+                           uint32_t errCode ) __attribute__( ( naked ) ) FREERTOS_SYSTEM_CALL;
+
+#define safeASSERT( x )                      \
+    if( ( x ) == pdFALSE )                   \
+    {                                        \
+        MPU_vSafeAssertError( __FILE__, __func__, __LINE__, (uint32_t ) 0xDEADDEADUL ); \
+    }
+
+
+#define configASSERT( x ) safeASSERT( x )
+
+void vApplicationSafeAssertCallback (
+    xFrKSafeAssertFaultInfo * pxKernelAssertInfo,
+    xFrPFaultExceptionInfo * pxPortAssertInfo
+) PRIVILEGED_FUNCTION;
+
+
 #ifndef configASSERT
     #define configASSERT( x )
     #define configASSERT_DEFINED    0

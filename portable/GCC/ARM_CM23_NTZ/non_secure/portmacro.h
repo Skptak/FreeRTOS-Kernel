@@ -79,6 +79,39 @@
  */
 #define portDISABLE_INTERRUPTS()    __asm volatile ( " cpsid i " ::: "memory" )
 #define portENABLE_INTERRUPTS()     __asm volatile ( " cpsie i " ::: "memory" )
+
+/**
+ * @brief Size in words to use for an exception stack, used when an assert is triggered.
+ */
+#ifndef configEXCEPTION_STACK_SIZE
+    #define configEXCEPTION_STACK_SIZE 0x200
+#endif /* configEXCEPTION_STACK_SIZE */
+
+
+/**
+ * @brief Info Pulled from from the CPU when a hardware exception occurs.
+ */
+typedef struct CORTEX_RX_SAFE_ASSERT_FAULT_INFO
+{
+    /* Cortex-R Series Exception Diagnostics. */
+    uint32_t ulCPSR;    /* Current Program Status Register (CPSR). */
+    uint32_t ulDFSR;    /* Data Fault Status Register (DFSR). */
+    uint32_t ulIFSR;    /* Instruction Fault Status Register (IFSR). */
+    uint32_t ulADFSR;   /* Auxiliary Data Fault Status Register (ADFSR). */
+    uint32_t ulAIFSR;   /* Auxiliary Instruction Fault Status Register (AIFSR). */
+    uint32_t ulDFAR;    /* Data Fault Address Register (DFAR). */
+    uint32_t ulIFAR;    /* Instruction Fault Address Register (IFAR). */
+
+    /* Arm-M Series Architecture Exception Stack. */
+    uint32_t ulGPRZero;                 /* General Purpose Register 0 */
+    uint32_t ulGPROne;                  /* General Purpose Register 1 */
+    uint32_t ulGPRTwo;                  /* General Purpose Register 2 */
+    uint32_t ulGPRThree;                /* General Purpose Register 3 */
+    uint32_t ulGPRTwelve;               /* General Purpose Register 12 */
+    uint32_t ulLinkRegister;            /* Link Register when Fault Happened. */
+    uint32_t ulProgramCounter;          /* Program Counter when Fault Happened.  */
+    uint32_t ulProgramStatusRegister;   /* Current Program Status Register when fault happened */
+} xFrPFaultExceptionInfo;
 /*-----------------------------------------------------------*/
 
 /* *INDENT-OFF* */
