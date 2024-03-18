@@ -57,7 +57,7 @@
     #error configENABLE_TRUSTZONE must be defined in FreeRTOSConfig.h.  Set configENABLE_TRUSTZONE to 1 to enable TrustZone or 0 to disable TrustZone.
 #endif /* configENABLE_TRUSTZONE */
 
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /**
  * @brief Type definitions.
@@ -87,7 +87,7 @@ typedef unsigned long    UBaseType_t;
 #else
     #error configTICK_TYPE_WIDTH_IN_BITS set to unsupported tick type width.
 #endif
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /**
  * Architecture specifics.
@@ -101,7 +101,7 @@ typedef unsigned long    UBaseType_t;
     #define portFORCE_INLINE               inline __attribute__( ( always_inline ) )
 #endif
 #define portHAS_STACK_OVERFLOW_CHECKING    1
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /**
  * @brief Extern declarations.
@@ -116,26 +116,18 @@ extern void vPortExitCritical( void ) /* PRIVILEGED_FUNCTION */;
 extern uint32_t ulSetInterruptMask( void ) /* __attribute__(( naked )) PRIVILEGED_FUNCTION */;
 extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) PRIVILEGED_FUNCTION */;
 
-#if ( configENABLE_TRUSTZONE == 1 )
-    extern void vPortAllocateSecureContext( uint32_t ulSecureStackSize ); /* __attribute__ (( naked )) */
-    extern void vPortFreeSecureContext( uint32_t * pulTCB ) /* __attribute__ (( naked )) PRIVILEGED_FUNCTION */;
-#endif /* configENABLE_TRUSTZONE */
+extern BaseType_t xIsPrivileged( void ) /* __attribute__ (( naked )) */;
+extern void vResetPrivilege( void ) /* __attribute__ (( naked )) */;
 
-#if ( configENABLE_MPU == 1 )
-    extern BaseType_t xIsPrivileged( void ) /* __attribute__ (( naked )) */;
-    extern void vResetPrivilege( void ) /* __attribute__ (( naked )) */;
-#endif /* configENABLE_MPU */
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /**
  * @brief MPU specific constants.
  */
-#if ( configENABLE_MPU == 1 )
-    #define portUSING_MPU_WRAPPERS    1
-    #define portPRIVILEGE_BIT         ( 0x80000000UL )
-#else
-    #define portPRIVILEGE_BIT         ( 0x0UL )
-#endif /* configENABLE_MPU */
+
+#define portUSING_MPU_WRAPPERS    1
+#define portPRIVILEGE_BIT         ( 0x80000000UL )
+
 
 /* MPU settings that can be overriden in FreeRTOSConfig.h. */
 #ifndef configTOTAL_MPU_REGIONS
@@ -184,7 +176,7 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 #define portMPU_REGION_READ_ONLY                      ( 6UL << 24UL )
 
 #define portMPU_REGION_EXECUTE_NEVER                  ( 0x1UL << 28UL )
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /* Attributes used in MPU_RASR registers. */
 #define portMPU_REGION_PRIVILEGED_READ_WRITE_UNPRIV_READ_ONLY    ( 0x2UL << 24UL )
@@ -197,89 +189,37 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 #define portMPU_RASR_TEX_S_C_B_LOCATION           ( 16U )
 #define portNVIC_MEM_FAULT_ENABLE                 ( 1UL << 16UL )
 
-#if ( configENABLE_MPU == 1 )
 
 /**
  * @brief Settings to define an MPU region.
  */
-    typedef struct MPURegionSettings
-    {
-        uint32_t ulRBAR; /**< RBAR for the region. */
-        uint32_t ulRASR; /**< RASR for the region. */
-    } MPURegionSettings_t;
+typedef struct MPURegionSettings
+{
+    uint32_t ulRBAR; /**< RBAR for the region. */
+    uint32_t ulRASR; /**< RASR for the region. */
+} MPURegionSettings_t;
 
-    #if ( configUSE_MPU_WRAPPERS_V1 == 0 )
-
-        #ifndef configSYSTEM_CALL_STACK_SIZE
-            #error configSYSTEM_CALL_STACK_SIZE must be defined to the desired size of the system call stack in words for using MPU wrappers v2.
-        #endif
+#ifndef configSYSTEM_CALL_STACK_SIZE
+    #error configSYSTEM_CALL_STACK_SIZE must be defined to the desired size of the system call stack in words for using MPU wrappers v2.
+#endif
 
 /**
  * @brief System call stack.
  */
-        typedef struct SYSTEM_CALL_STACK_INFO
-        {
-            uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ];
-            uint32_t * pulSystemCallStack;
-            uint32_t * pulSystemCallStackLimit;
-            uint32_t * pulTaskStack;
-            uint32_t ulLinkRegisterAtSystemCallEntry;
-            uint32_t ulStackLimitRegisterAtSystemCallEntry;
-        } xSYSTEM_CALL_STACK_INFO;
-
-    #endif /* configUSE_MPU_WRAPPERS_V1 == 0 */
+typedef struct SYSTEM_CALL_STACK_INFO
+{
+    uint32_t ulSystemCallStackBuffer[ configSYSTEM_CALL_STACK_SIZE ];
+    uint32_t * pulSystemCallStack;
+    uint32_t * pulSystemCallStackLimit;
+    uint32_t * pulTaskStack;
+    uint32_t ulLinkRegisterAtSystemCallEntry;
+    uint32_t ulStackLimitRegisterAtSystemCallEntry;
+} xSYSTEM_CALL_STACK_INFO;
 
 /**
  * @brief MPU settings as stored in the TCB.
- */
-    #if ( ( configENABLE_FPU == 1 ) || ( configENABLE_MVE == 1 ) )
-
-        #if ( configENABLE_TRUSTZONE == 1 )
-
-/*
- * +-----------+---------------+----------+-----------------+------------------------------+-----+
- * |  s16-s31  | s0-s15, FPSCR |  r4-r11  | r0-r3, r12, LR, | xSecureContext, PSP, PSPLIM, |     |
- * |           |               |          | PC, xPSR        | CONTROL, EXC_RETURN          |     |
- * +-----------+---------------+----------+-----------------+------------------------------+-----+
  *
- * <-----------><--------------><---------><----------------><-----------------------------><---->
- *      16             16            8               8                     5                   1
- */
-            #define MAX_CONTEXT_SIZE    54
-
-        #else /* #if( configENABLE_TRUSTZONE == 1 ) */
-
-/*
- * +-----------+---------------+----------+-----------------+----------------------+-----+
- * |  s16-s31  | s0-s15, FPSCR |  r4-r11  | r0-r3, r12, LR, | PSP, PSPLIM, CONTROL |     |
- * |           |               |          | PC, xPSR        | EXC_RETURN           |     |
- * +-----------+---------------+----------+-----------------+----------------------+-----+
- *
- * <-----------><--------------><---------><----------------><---------------------><---->
- *      16             16            8               8                  4              1
- */
-            #define MAX_CONTEXT_SIZE    53
-
-        #endif /* #if( configENABLE_TRUSTZONE == 1 ) */
-
-    #else /* #if ( ( configENABLE_FPU == 1 ) || ( configENABLE_MVE == 1 ) ) */
-
-        #if ( configENABLE_TRUSTZONE == 1 )
-
-/*
- * +----------+-----------------+------------------------------+-----+
- * |  r4-r11  | r0-r3, r12, LR, | xSecureContext, PSP, PSPLIM, |     |
- * |          | PC, xPSR        | CONTROL, EXC_RETURN          |     |
- * +----------+-----------------+------------------------------+-----+
- *
- * <---------><----------------><------------------------------><---->
- *     8               8                      5                   1
- */
-            #define MAX_CONTEXT_SIZE    22
-
-        #else /* #if( configENABLE_TRUSTZONE == 1 ) */
-
-/*
+ * @note
  * +----------+-----------------+----------------------+-----+
  * |  r4-r11  | r0-r3, r12, LR, | PSP, PSPLIM, CONTROL |     |
  * |          | PC, xPSR        | EXC_RETURN           |     |
@@ -288,36 +228,32 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
  * <---------><----------------><----------------------><---->
  *     8               8                  4              1
  */
-            #define MAX_CONTEXT_SIZE    21
+#define MAX_CONTEXT_SIZE    21
 
-        #endif /* #if( configENABLE_TRUSTZONE == 1 ) */
-
-    #endif /* #if ( ( configENABLE_FPU == 1 ) || ( configENABLE_MVE == 1 ) ) */
 
 /* Flags used for xMPU_SETTINGS.ulTaskFlags member. */
-    #define portSTACK_FRAME_HAS_PADDING_FLAG    ( 1UL << 0UL )
-    #define portTASK_IS_PRIVILEGED_FLAG         ( 1UL << 1UL )
+#define portSTACK_FRAME_HAS_PADDING_FLAG    ( 1UL << 0UL )
+#define portTASK_IS_PRIVILEGED_FLAG         ( 1UL << 1UL )
 
 /* Size of an Access Control List (ACL) entry in bits. */
-    #define portACL_ENTRY_SIZE_BITS             ( 32U )
+#define portACL_ENTRY_SIZE_BITS             ( 32U )
 
-    typedef struct MPU_SETTINGS
-    {
-        uint32_t ulMAIR0;                                              /**< MAIR0 for the task containing attributes for all the 4 per task regions. */
-        MPURegionSettings_t xRegionsSettings[ portTOTAL_NUM_REGIONS ]; /**< Settings for 4 per task regions. */
-        uint32_t ulContext[ MAX_CONTEXT_SIZE ];
-        uint32_t ulTaskFlags;
+typedef struct MPU_SETTINGS
+{
+    uint32_t ulMAIR0;                                              /**< MAIR0 for the task containing attributes for all the 4 per task regions. */
+    MPURegionSettings_t xRegionsSettings[ portTOTAL_NUM_REGIONS ]; /**< Settings for 4 per task regions. */
+    uint32_t ulContext[ MAX_CONTEXT_SIZE ];
+    uint32_t ulTaskFlags;
 
-        #if ( configUSE_MPU_WRAPPERS_V1 == 0 )
-            xSYSTEM_CALL_STACK_INFO xSystemCallStackInfo;
-            #if ( configENABLE_ACCESS_CONTROL_LIST == 1 )
-                uint32_t ulAccessControlList[ ( configPROTECTED_KERNEL_OBJECT_POOL_SIZE / portACL_ENTRY_SIZE_BITS ) + 1 ];
-            #endif
+    #if ( configUSE_MPU_WRAPPERS_V1 == 0 )
+        xSYSTEM_CALL_STACK_INFO xSystemCallStackInfo;
+        #if ( configENABLE_ACCESS_CONTROL_LIST == 1 )
+            uint32_t ulAccessControlList[ ( configPROTECTED_KERNEL_OBJECT_POOL_SIZE / portACL_ENTRY_SIZE_BITS ) + 1 ];
         #endif
-    } xMPU_SETTINGS;
+    #endif
+} xMPU_SETTINGS;
 
-#endif /* configENABLE_MPU == 1 */
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /**
  * @brief Validate priority of ISRs that are allowed to call FreeRTOS
@@ -339,18 +275,13 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 #define portSVC_RAISE_PRIVILEGE            103
 #define portSVC_SYSTEM_CALL_EXIT           104
 #define portSVC_YIELD                      105
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /**
  * @brief Scheduler utilities.
  */
-#if ( configENABLE_MPU == 1 )
-    #define portYIELD()               __asm volatile ( "svc %0" ::"i" ( portSVC_YIELD ) : "memory" )
-    #define portYIELD_WITHIN_API()    vPortYield()
-#else
-    #define portYIELD()               vPortYield()
-    #define portYIELD_WITHIN_API()    vPortYield()
-#endif
+#define portYIELD()               __asm volatile ( "svc %0" ::"i" ( portSVC_YIELD ) : "memory" )
+#define portYIELD_WITHIN_API()    vPortYield()
 
 #define portNVIC_INT_CTRL_REG     ( *( ( volatile uint32_t * ) 0xe000ed04 ) )
 #define portNVIC_PENDSVSET_BIT    ( 1UL << 28UL )
@@ -368,7 +299,7 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
         }                                                   \
     } while( 0 )
 #define portYIELD_FROM_ISR( x )    portEND_SWITCHING_ISR( x )
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /**
  * @brief Critical section management.
@@ -377,7 +308,7 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 #define portCLEAR_INTERRUPT_MASK_FROM_ISR( x )    vClearInterruptMask( x )
 #define portENTER_CRITICAL()                      vPortEnterCritical()
 #define portEXIT_CRITICAL()                       vPortExitCritical()
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /**
  * @brief Tickless idle/low power functionality.
@@ -386,46 +317,22 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
     extern void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime );
     #define portSUPPRESS_TICKS_AND_SLEEP( xExpectedIdleTime )    vPortSuppressTicksAndSleep( xExpectedIdleTime )
 #endif
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /**
  * @brief Task function macros as described on the FreeRTOS.org WEB site.
  */
 #define portTASK_FUNCTION_PROTO( vFunction, pvParameters )    void vFunction( void * pvParameters )
 #define portTASK_FUNCTION( vFunction, pvParameters )          void vFunction( void * pvParameters )
-/*-----------------------------------------------------------*/
 
-#if ( configENABLE_TRUSTZONE == 1 )
-
-/**
- * @brief Allocate a secure context for the task.
- *
- * Tasks are not created with a secure context. Any task that is going to call
- * secure functions must call portALLOCATE_SECURE_CONTEXT() to allocate itself a
- * secure context before it calls any secure function.
- *
- * @param[in] ulSecureStackSize The size of the secure stack to be allocated.
- */
-    #define portALLOCATE_SECURE_CONTEXT( ulSecureStackSize )    vPortAllocateSecureContext( ulSecureStackSize )
-
-/**
- * @brief Called when a task is deleted to delete the task's secure context,
- * if it has one.
- *
- * @param[in] pxTCB The TCB of the task being deleted.
- */
-    #define portCLEAN_UP_TCB( pxTCB )                           vPortFreeSecureContext( ( uint32_t * ) pxTCB )
-#endif /* configENABLE_TRUSTZONE */
-/*-----------------------------------------------------------*/
-
-#if ( configENABLE_MPU == 1 )
+/* ----------------------------------------------------------------------------------- */
 
 /**
  * @brief Checks whether or not the processor is privileged.
  *
  * @return 1 if the processor is already privileged, 0 otherwise.
  */
-    #define portIS_PRIVILEGED()      xIsPrivileged()
+#define portIS_PRIVILEGED()      xIsPrivileged()
 
 /**
  * @brief Raise an SVC request to raise privilege.
@@ -434,39 +341,33 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
  * then it raises the privilege. If this is called from any other place,
  * the privilege is not raised.
  */
-    #define portRAISE_PRIVILEGE()    __asm volatile ( "svc %0 \n" ::"i" ( portSVC_RAISE_PRIVILEGE ) : "memory" );
+#define portRAISE_PRIVILEGE()    __asm volatile ( "svc %0 \n" ::"i" ( portSVC_RAISE_PRIVILEGE ) : "memory" );
 
 /**
  * @brief Lowers the privilege level by setting the bit 0 of the CONTROL
  * register.
  */
-    #define portRESET_PRIVILEGE()    vResetPrivilege()
-#else
-    #define portIS_PRIVILEGED()
-    #define portRAISE_PRIVILEGE()
-    #define portRESET_PRIVILEGE()
-#endif /* configENABLE_MPU */
-/*-----------------------------------------------------------*/
+#define portRESET_PRIVILEGE()    vResetPrivilege()
 
-#if ( configENABLE_MPU == 1 )
+/* ----------------------------------------------------------------------------------- */
 
-    extern BaseType_t xPortIsTaskPrivileged( void );
+
+extern BaseType_t xPortIsTaskPrivileged( void );
 
 /**
  * @brief Checks whether or not the calling task is privileged.
  *
  * @return pdTRUE if the calling task is privileged, pdFALSE otherwise.
  */
-    #define portIS_TASK_PRIVILEGED()    xPortIsTaskPrivileged()
+#define portIS_TASK_PRIVILEGED()    xPortIsTaskPrivileged()
 
-#endif /* configENABLE_MPU == 1 */
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /**
  * @brief Barriers.
  */
 #define portMEMORY_BARRIER()    __asm volatile ( "" ::: "memory" )
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /* Select correct value of configUSE_PORT_OPTIMISED_TASK_SELECTION
  * based on whether or not Mainline extension is implemented. */
@@ -516,7 +417,7 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
     #define portGET_HIGHEST_PRIORITY( uxTopPriority, uxReadyPriorities )    uxTopPriority = ( 31UL - ulPortCountLeadingZeros( ( uxReadyPriorities ) ) )
 
 #endif /* configUSE_PORT_OPTIMISED_TASK_SELECTION */
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /* *INDENT-OFF* */
 #ifdef __cplusplus

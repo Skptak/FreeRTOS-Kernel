@@ -51,11 +51,11 @@
 #define portARCH_NAME                    "Cortex-M0+"
 #define portDONT_DISCARD                 __attribute__( ( used ) )
 #define portHAS_ARMV8M_MAIN_EXTENSION   0
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /* ARMv8-M common port configurations. */
 #include "portmacrocommon.h"
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 #if ( configTOTAL_MPU_REGIONS != 8 )
     #error The ARM Cortex M0+ Only supports 8 MPU Regions
@@ -72,14 +72,14 @@
 #elif( configENABLE_FPU != 0 )
     #error configENABLE_FPU must be left undefined, or defined to 0 for the Cortex-M0+.
 #endif
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /**
  * @brief Critical section management.
  */
 #define portDISABLE_INTERRUPTS()    __asm volatile ( " cpsid i " ::: "memory" )
 #define portENABLE_INTERRUPTS()     __asm volatile ( " cpsie i " ::: "memory" )
-/*-----------------------------------------------------------*/
+/* ----------------------------------------------------------------------------------- */
 
 /* *INDENT-OFF* */
 #ifdef __cplusplus
