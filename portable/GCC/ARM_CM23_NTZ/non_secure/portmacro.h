@@ -75,10 +75,60 @@
 /*-----------------------------------------------------------*/
 
 /**
- * @brief Critical section management.
+ * @brief Enable interrupts.
+ *
+ * @ingroup Interrupt Management
  */
-#define portDISABLE_INTERRUPTS()    __asm volatile ( " cpsid i " ::: "memory" )
-#define portENABLE_INTERRUPTS()     __asm volatile ( " cpsie i " ::: "memory" )
+void vPortEnableInterrupts( void );
+
+#define portENABLE_INTERRUPTS() vPortEnableInterrupts()
+
+/**
+ * @brief Disable interrupts.
+ *
+ * @ingroup Interrupt Management
+ */
+void vPortDisableInterrupts( void );
+
+#define portDISABLE_INTERRUPTS() vPortDisableInterrupts()
+
+/**
+ * @brief Perform a DSB and ISB to flush the data and instruction caches.
+ */
+void vPortPipelineFlush( void );
+
+#define portPIPELINE_FLUSH() vPortPipelineFlush()
+
+/**
+ * @brief Set the PSP to be the pulSystemCallStack.
+ */
+void vPortSetSystemCallStack( uint32_t * pulSystemCallStack );
+
+/**
+ * @brief Set the control bit high for the duration of a system call.
+ */
+void vPortRaisePrivilege( void );
+
+/**
+ * @brief Raise SVC for exiting from a system call.
+ */
+void vRequestSystemCallExit( void );
+
+
+/**
+ * @brief Set the Program Stack Pointer.
+ */
+void vPortSetPSP( uint32_t * pulTaskStack );
+
+/**
+ * @brief Obtain the number of the currently executing interrupt. 
+ *
+ * @note Interrupt Program Status Register (IPSR) holds the exception
+ * number of the currently-executing exception or zero for Thread mode.
+ */
+uint32_t xPortGetIPSR( void );
+
+
 /*-----------------------------------------------------------*/
 
 /* *INDENT-OFF* */

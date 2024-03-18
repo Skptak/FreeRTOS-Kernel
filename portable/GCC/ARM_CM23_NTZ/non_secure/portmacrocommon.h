@@ -108,10 +108,10 @@ typedef unsigned long    UBaseType_t;
  */
 extern BaseType_t xPortIsInsideInterrupt( void );
 
-extern void vPortYield( void ) /* PRIVILEGED_FUNCTION */;
+void vPortYield( void ) /* PRIVILEGED_FUNCTION */;
 
-extern void vPortEnterCritical( void ) /* PRIVILEGED_FUNCTION */;
-extern void vPortExitCritical( void ) /* PRIVILEGED_FUNCTION */;
+void vPortEnterCritical( void ) /* PRIVILEGED_FUNCTION */;
+void vPortExitCritical( void ) /* PRIVILEGED_FUNCTION */;
 
 extern uint32_t ulSetInterruptMask( void ) /* __attribute__(( naked )) PRIVILEGED_FUNCTION */;
 extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) PRIVILEGED_FUNCTION */;
@@ -344,13 +344,8 @@ extern void vClearInterruptMask( uint32_t ulMask ) /* __attribute__(( naked )) P
 /**
  * @brief Scheduler utilities.
  */
-#if ( configENABLE_MPU == 1 )
-    #define portYIELD()               __asm volatile ( "svc %0" ::"i" ( portSVC_YIELD ) : "memory" )
-    #define portYIELD_WITHIN_API()    vPortYield()
-#else
-    #define portYIELD()               vPortYield()
-    #define portYIELD_WITHIN_API()    vPortYield()
-#endif
+#define portYIELD()               vPortYield()
+#define portYIELD_WITHIN_API()    vPortYield()
 
 #define portNVIC_INT_CTRL_REG     ( *( ( volatile uint32_t * ) 0xe000ed04 ) )
 #define portNVIC_PENDSVSET_BIT    ( 1UL << 28UL )
