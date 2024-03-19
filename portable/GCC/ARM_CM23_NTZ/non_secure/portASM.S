@@ -44,6 +44,8 @@
     .extern vSystemCallEnter
     .extern vSystemCallExit
 
+    #define portSVC_SYSTEM_CALL_EXIT           104
+
 /* ----------------------------------------------------------------------------------- */
 
 /*
@@ -144,5 +146,15 @@ xPortGetIPSR:
 
 /* ----------------------------------------------------------------------------------- */
 
+/*
+ * void vPortSystemCallExit( void );
+ */
+.align 4
+.global vRequestSystemCallExit
+.type vRequestSystemCallExit, %function
+vRequestSystemCallExit:
+    SVC     #portSVC_SYSTEM_CALL_EXIT
+
+/* ----------------------------------------------------------------------------------- */
 
 .end

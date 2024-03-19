@@ -79,15 +79,11 @@
  */
 #define portDISABLE_INTERRUPTS()    __asm volatile ( " cpsid i " ::: "memory" )
 #define portENABLE_INTERRUPTS()     __asm volatile ( " cpsie i " ::: "memory" )
-#define portREQUEST_SYS_CALL_EXIT() __asm volatile ( " svc %0 "  :: "i" ( portSVC_SYSTEM_CALL_EXIT ) : "memory" )
-//#define portYIELD()                 __asm volatile ( " svc %0 "  :: "i" ( portSVC_YIELD ) : "memory" )
 
-
-#define portCACHE_FLUSH()           __asm volatile (  " dsb  \n" \
-                                                      " isb  \n" \
+#define portCACHE_FLUSH()           __asm volatile (  " dsb  \n"        \
+                                                      " isb  \n"        \
                                                       ::: "memory" )
 
-// #define portSET_PSP( psp )                  __asm volatile ( "msr psp, %0" : : "r" ( psp ) );
 #define portGET_IPSR( ulCurrentInterrupt )  __asm volatile ( "mrs %0, ipsr" : "=r" ( ulCurrentInterrupt )::"memory" );
 
 /* ----------------------------------------------------------------------------------- */

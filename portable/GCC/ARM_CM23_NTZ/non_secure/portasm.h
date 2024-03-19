@@ -69,7 +69,7 @@ void vRaisePrivilege( void ) __attribute__( ( naked ) ) PRIVILEGED_FUNCTION;
  *  Bit[0] = 0 --> The processor is running privileged
  *  Bit[0] = 1 --> The processor is running unprivileged.
  */
-void vResetPrivilege( void ) __attribute__( ( naked ) );
+void vResetPrivilege( void ) __attribute__( ( naked ) ) FREERTOS_SYSTEM_CALL;
 
 /**
  * @brief Starts the first task.
@@ -102,7 +102,7 @@ void SVC_Handler( void ) __attribute__( ( naked ) ) PRIVILEGED_FUNCTION;
  * @param[in] ulSecureStackSize The size of the stack to be allocated on the
  * secure side for the calling task.
  */
-void vPortAllocateSecureContext( uint32_t ulSecureStackSize ) __attribute__( ( naked ) );
+void vPortAllocateSecureContext( uint32_t ulSecureStackSize ) __attribute__( ( naked ) ) FREERTOS_SYSTEM_CALL;
 
 /**
  * @brief Free the task's secure context.
@@ -120,6 +120,11 @@ void vPortFreeSecureContext( uint32_t * pulTCB ) __attribute__( ( naked ) ) PRIV
  *  Bit[0] = 0 --> The processor is running privileged
  *  Bit[0] = 1 --> The processor is running unprivileged.
  */
-void vRequestPortYield( void ) __attribute__( ( naked ) );
+void vRequestPortYield( void ) __attribute__( ( naked ) ) FREERTOS_SYSTEM_CALL;
+
+/**
+ * @brief Raise SVC for exiting from a system call.
+ */
+void vRequestSystemCallExit( void ) __attribute__( ( naked ) ) PRIVILEGED_FUNCTION;
 
 #endif /* __PORT_ASM_H__ */

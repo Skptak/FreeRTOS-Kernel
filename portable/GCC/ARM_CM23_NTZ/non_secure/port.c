@@ -372,10 +372,6 @@ void vSystemCallEnter( uint32_t * pulTaskStack,
                         uint32_t ulLR,
                         uint8_t ucSystemCallNumber ) PRIVILEGED_FUNCTION;
 
-/**
- * @brief Raise SVC for exiting from a system call.
- */
-void vRequestSystemCallExit( void ) __attribute__( ( naked ) ) PRIVILEGED_FUNCTION;
 
 /**
  * @brief Sets up the task stack so that upon returning from
@@ -762,13 +758,6 @@ void vSystemCallEnter( uint32_t * pulTaskStack,
 
 /* ----------------------------------------------------------------------------------- */
 
-void vRequestSystemCallExit( void ) /* __attribute__( ( naked ) ) PRIVILEGED_FUNCTION */
-{
-	portREQUEST_SYS_CALL_EXIT();
-}
-
-/* ----------------------------------------------------------------------------------- */
-
 void vSystemCallExit( uint32_t * pulSystemCallStack,
                         uint32_t ulLR ) /* PRIVILEGED_FUNCTION */
 {
@@ -982,80 +971,6 @@ BaseType_t xPortStartScheduler( void ) /* PRIVILEGED_FUNCTION */
     }
     #endif /* configCHECK_HANDLER_INSTALLATION */
 
-    #if ( ( configASSERT_DEFINED == 1 ) && ( portHAS_ARMV8M_MAIN_EXTENSION == 1 ) )
-    {
-        volatile uint32_t ulImplementedPrioBits = 0;
-        volatile uint8_t ucMaxPriorityValue;
-
-        /* Determine the maximum priority from which ISR safe FreeRTOS API
-         * functions can be called. ISR safe functions are those that end in
-         * "FromISR". FreeRTOS maintains separate thread and ISR API functions to
-         * ensure interrupt entry is as fast and simple as possible.
-         *
-         * First, determine the number of priority bits available. Write to all
-         * possible bits in the priority setting for SVCall. */
-        portNVIC_SHPR2_REG = 0xFF000000;
-
-        /* Read the value back to see how many bits stuck. */
-        ucMaxPriorityValue = ( uint8_t ) ( ( portNVIC_SHPR2_REG & 0xFF000000 ) >> 24 );
-
-        /* Use the same mask on the maximum system call priority. */
-        ucMaxSysCallPriority = configMAX_SYSCALL_INTERRUPT_PRIORITY & ucMaxPriorityValue;
-
-        /* Check that the maximum system call priority is nonzero after
-         * accounting for the number of priority bits supported by the
-         * hardware. A priority of 0 is invalid because setting the BASEPRI
-         * register to 0 unmasks all interrupts, and interrupts with priority 0
-         * cannot be masked using BASEPRI.
-         * See https://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html */
-        configASSERT( ucMaxSysCallPriority );
-
-        /* Check that the bits not implemented in hardware are zero in
-         * configMAX_SYSCALL_INTERRUPT_PRIORITY. */
-        configASSERT( ( configMAX_SYSCALL_INTERRUPT_PRIORITY & ( uint8_t ) ( ~( uint32_t ) ucMaxPriorityValue ) ) == 0U );
-
-        /* Calculate the maximum acceptable priority group value for the number
-         * of bits read back. */
-        while( ( ucMaxPriorityValue & portTOP_BIT_OF_BYTE ) == portTOP_BIT_OF_BYTE )
-        {
-            ulImplementedPrioBits++;
-            ucMaxPriorityValue <<= ( uint8_t ) 0x01;
-        }
-
-        if( ulImplementedPrioBits == 8 )
-        {
-            /* When the hardware implements 8 priority bits, there is no way for
-             * the software to configure PRIGROUP to not have sub-priorities. As
-             * a result, the least significant bit is always used for sub-priority
-             * and there are 128 preemption priorities and 2 sub-priorities.
-             *
-             * This may cause some confusion in some cases - for example, if
-             * configMAX_SYSCALL_INTERRUPT_PRIORITY is set to 5, both 5 and 4
-             * priority interrupts will be masked in Critical Sections as those
-             * are at the same preemption priority. This may appear confusing as
-             * 4 is higher (numerically lower) priority than
-             * configMAX_SYSCALL_INTERRUPT_PRIORITY and therefore, should not
-             * have been masked. Instead, if we set configMAX_SYSCALL_INTERRUPT_PRIORITY
-             * to 4, this confusion does not happen and the behaviour remains the same.
-             *
-             * The following assert ensures that the sub-priority bit in the
-             * configMAX_SYSCALL_INTERRUPT_PRIORITY is clear to avoid the above mentioned
-             * confusion. */
-            configASSERT( ( configMAX_SYSCALL_INTERRUPT_PRIORITY & 0x1U ) == 0U );
-            ulMaxPRIGROUPValue = 0;
-        }
-        else
-        {
-            ulMaxPRIGROUPValue = portMAX_PRIGROUP_BITS - ulImplementedPrioBits;
-        }
-
-        /* Shift the priority group value back to its position within the AIRCR
-         * register. */
-        ulMaxPRIGROUPValue <<= portPRIGROUP_SHIFT;
-        ulMaxPRIGROUPValue &= portPRIORITY_GROUP_MASK;
-    }
-    #endif /* #if ( ( configASSERT_DEFINED == 1 ) && ( portHAS_ARMV8M_MAIN_EXTENSION == 1 ) ) */
-
     /* Make PendSV and SysTick the lowest priority interrupts, and make SVCall
      * the highest priority. */
     portNVIC_SHPR3_REG |= portNVIC_PENDSV_PRI;
@@ -1089,6 +1004,7 @@ BaseType_t xPortStartScheduler( void ) /* PRIVILEGED_FUNCTION */
     /* Should not get here. */
     return 0;
 }
+
 /* ----------------------------------------------------------------------------------- */
 
 void vPortEndScheduler( void ) /* PRIVILEGED_FUNCTION */
@@ -1097,6 +1013,7 @@ void vPortEndScheduler( void ) /* PRIVILEGED_FUNCTION */
      * Artificially force an assert. */
     configASSERT( ulCriticalNesting == 1000UL );
 }
+
 /* ----------------------------------------------------------------------------------- */
 
 
@@ -1284,98 +1201,38 @@ BaseType_t xPortIsInsideInterrupt( void )
 
     return xReturn;
 }
-/* ----------------------------------------------------------------------------------- */
-
-#if ( ( configASSERT_DEFINED == 1 ) && ( portHAS_ARMV8M_MAIN_EXTENSION == 1 ) )
-
-    void vPortValidateInterruptPriority( void )
-    {
-        uint32_t ulCurrentInterrupt;
-        uint8_t ucCurrentPriority;
-
-        /* Obtain the number of the currently executing interrupt. */
-        __asm volatile ( "mrs %0, ipsr" : "=r" ( ulCurrentInterrupt )::"memory" );
-
-        /* Is the interrupt number a user defined interrupt? */
-        if( ulCurrentInterrupt >= portFIRST_USER_INTERRUPT_NUMBER )
-        {
-            /* Look up the interrupt's priority. */
-            ucCurrentPriority = pcInterruptPriorityRegisters[ ulCurrentInterrupt ];
-
-            /* The following assertion will fail if a service routine (ISR) for
-             * an interrupt that has been assigned a priority above
-             * configMAX_SYSCALL_INTERRUPT_PRIORITY calls an ISR safe FreeRTOS API
-             * function.  ISR safe FreeRTOS API functions must *only* be called
-             * from interrupts that have been assigned a priority at or below
-             * configMAX_SYSCALL_INTERRUPT_PRIORITY.
-             *
-             * Numerically low interrupt priority numbers represent logically high
-             * interrupt priorities, therefore the priority of the interrupt must
-             * be set to a value equal to or numerically *higher* than
-             * configMAX_SYSCALL_INTERRUPT_PRIORITY.
-             *
-             * Interrupts that  use the FreeRTOS API must not be left at their
-             * default priority of  zero as that is the highest possible priority,
-             * which is guaranteed to be above configMAX_SYSCALL_INTERRUPT_PRIORITY,
-             * and  therefore also guaranteed to be invalid.
-             *
-             * FreeRTOS maintains separate thread and ISR API functions to ensure
-             * interrupt entry is as fast and simple as possible.
-             *
-             * The following links provide detailed information:
-             * https://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html
-             * https://www.FreeRTOS.org/FAQHelp.html */
-            configASSERT( ucCurrentPriority >= ucMaxSysCallPriority );
-        }
-
-        /* Priority grouping:  The interrupt controller (NVIC) allows the bits
-         * that define each interrupt's priority to be split between bits that
-         * define the interrupt's pre-emption priority bits and bits that define
-         * the interrupt's sub-priority.  For simplicity all bits must be defined
-         * to be pre-emption priority bits.  The following assertion will fail if
-         * this is not the case (if some bits represent a sub-priority).
-         *
-         * If the application only uses CMSIS libraries for interrupt
-         * configuration then the correct setting can be achieved on all Cortex-M
-         * devices by calling NVIC_SetPriorityGrouping( 0 ); before starting the
-         * scheduler.  Note however that some vendor specific peripheral libraries
-         * assume a non-zero priority group setting, in which cases using a value
-         * of zero will result in unpredictable behaviour. */
-        configASSERT( ( portAIRCR_REG & portPRIORITY_GROUP_MASK ) <= ulMaxPRIGROUPValue );
-    }
-
-#endif /* #if ( ( configASSERT_DEFINED == 1 ) && ( portHAS_ARMV8M_MAIN_EXTENSION == 1 ) ) */
-/* ----------------------------------------------------------------------------------- */
-
-    void vPortGrantAccessToKernelObject( TaskHandle_t xInternalTaskHandle,
-                                         int32_t lInternalIndexOfKernelObject ) /* PRIVILEGED_FUNCTION */
-    {
-        uint32_t ulAccessControlListEntryIndex, ulAccessControlListEntryBit;
-        xMPU_SETTINGS * xTaskMpuSettings;
-
-        ulAccessControlListEntryIndex = ( ( uint32_t ) lInternalIndexOfKernelObject / portACL_ENTRY_SIZE_BITS );
-        ulAccessControlListEntryBit = ( ( uint32_t ) lInternalIndexOfKernelObject % portACL_ENTRY_SIZE_BITS );
-
-        xTaskMpuSettings = xTaskGetMPUSettings( xInternalTaskHandle );
-
-        xTaskMpuSettings->ulAccessControlList[ ulAccessControlListEntryIndex ] |= ( 1U << ulAccessControlListEntryBit );
-    }
 
 /* ----------------------------------------------------------------------------------- */
 
-    void vPortRevokeAccessToKernelObject( TaskHandle_t xInternalTaskHandle,
-                                          int32_t lInternalIndexOfKernelObject ) /* PRIVILEGED_FUNCTION */
-    {
-        uint32_t ulAccessControlListEntryIndex, ulAccessControlListEntryBit;
-        xMPU_SETTINGS * xTaskMpuSettings;
+void vPortGrantAccessToKernelObject( TaskHandle_t xInternalTaskHandle,
+                                        int32_t lInternalIndexOfKernelObject ) /* PRIVILEGED_FUNCTION */
+{
+    uint32_t ulAccessControlListEntryIndex, ulAccessControlListEntryBit;
+    xMPU_SETTINGS * xTaskMpuSettings;
 
-        ulAccessControlListEntryIndex = ( ( uint32_t ) lInternalIndexOfKernelObject / portACL_ENTRY_SIZE_BITS );
-        ulAccessControlListEntryBit = ( ( uint32_t ) lInternalIndexOfKernelObject % portACL_ENTRY_SIZE_BITS );
+    ulAccessControlListEntryIndex = ( ( uint32_t ) lInternalIndexOfKernelObject / portACL_ENTRY_SIZE_BITS );
+    ulAccessControlListEntryBit = ( ( uint32_t ) lInternalIndexOfKernelObject % portACL_ENTRY_SIZE_BITS );
 
-        xTaskMpuSettings = xTaskGetMPUSettings( xInternalTaskHandle );
+    xTaskMpuSettings = xTaskGetMPUSettings( xInternalTaskHandle );
 
-        xTaskMpuSettings->ulAccessControlList[ ulAccessControlListEntryIndex ] &= ~( 1U << ulAccessControlListEntryBit );
-    }
+    xTaskMpuSettings->ulAccessControlList[ ulAccessControlListEntryIndex ] |= ( 1U << ulAccessControlListEntryBit );
+}
+
+/* ----------------------------------------------------------------------------------- */
+
+void vPortRevokeAccessToKernelObject( TaskHandle_t xInternalTaskHandle,
+                                        int32_t lInternalIndexOfKernelObject ) /* PRIVILEGED_FUNCTION */
+{
+    uint32_t ulAccessControlListEntryIndex, ulAccessControlListEntryBit;
+    xMPU_SETTINGS * xTaskMpuSettings;
+
+    ulAccessControlListEntryIndex = ( ( uint32_t ) lInternalIndexOfKernelObject / portACL_ENTRY_SIZE_BITS );
+    ulAccessControlListEntryBit = ( ( uint32_t ) lInternalIndexOfKernelObject % portACL_ENTRY_SIZE_BITS );
+
+    xTaskMpuSettings = xTaskGetMPUSettings( xInternalTaskHandle );
+
+    xTaskMpuSettings->ulAccessControlList[ ulAccessControlListEntryIndex ] &= ~( 1U << ulAccessControlListEntryBit );
+}
 
 /* ----------------------------------------------------------------------------------- */
 
