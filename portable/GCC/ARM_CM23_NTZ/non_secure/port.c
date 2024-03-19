@@ -539,7 +539,7 @@ static void prvSetupMPU( void ) /* PRIVILEGED_FUNCTION */
     if( portMPU_TYPE_REG == portEXPECTED_MPU_TYPE_VALUE )
     {
         /* Setup privileged flash as Read Only so that privileged tasks can
-            * read it but not modify. */
+         * read it but not modify. */
         portMPU_RBAR_REG = ( ( uint32_t ) __privileged_functions_start__ ) | /* Base address. */
                                         ( portMPU_REGION_VALID ) |
                                         ( portPRIVILEGED_FLASH_REGION );
@@ -550,7 +550,7 @@ static void prvSetupMPU( void ) /* PRIVILEGED_FUNCTION */
                                     ( portMPU_REGION_ENABLE );
 
         /* Setup unprivileged flash as Read Only by both privileged and
-            * unprivileged tasks. All tasks can read it but no-one can modify. */
+         * unprivileged tasks. All tasks can read it but no-one can modify. */
         portMPU_RBAR_REG = ( ( uint32_t ) __FLASH_segment_start__ ) | /* Base address. */
                                         ( portMPU_REGION_VALID ) |
                                         ( portUNPRIVILEGED_FLASH_REGION );
@@ -572,7 +572,7 @@ static void prvSetupMPU( void ) /* PRIVILEGED_FUNCTION */
                                     ( portMPU_REGION_ENABLE );
 
         /* Enable MPU with privileged background access i.e. unmapped
-            * regions have privileged access. */
+         * regions have privileged access. */
         portMPU_CTRL_REG |= ( portMPU_PRIV_BACKGROUND_ENABLE_BIT | portMPU_ENABLE_BIT );
     }
 }
@@ -585,8 +585,7 @@ void vPortYield( void ) /* PRIVILEGED_FUNCTION */
 
     /* Barriers are normally not required but do ensure the code is
      * completely within the specified behaviour for the architecture. */
-    __asm volatile ( "dsb" ::: "memory" );
-    __asm volatile ( "isb" );
+    portCACHE_FLUSH();
 }
 /* ----------------------------------------------------------------------------------- */
 
@@ -597,8 +596,7 @@ void vPortEnterCritical( void ) /* PRIVILEGED_FUNCTION */
 
     /* Barriers are normally not required but do ensure the code is
      * completely within the specified behaviour for the architecture. */
-    __asm volatile ( "dsb" ::: "memory" );
-    __asm volatile ( "isb" );
+    portCACHE_FLUSH();
 }
 /* ----------------------------------------------------------------------------------- */
 
@@ -692,17 +690,17 @@ void vSystemCallEnter( uint32_t * pulTaskStack,
     pxMpuSettings = xTaskGetMPUSettings( pxCurrentTCB );
 
     /* Checks:
-        * 1. SVC is raised from the system call section (i.e. application is
-        *    not raising SVC directly).
-        * 2. pxMpuSettings->xSystemCallStackInfo.pulTaskStack must be NULL as
-        *    it is non-NULL only during the execution of a system call (i.e.
-        *    between system call enter and exit).
-        * 3. System call is not for a kernel API disabled by the configuration
-        *    in FreeRTOSConfig.h.
-        * 4. We do not need to check that ucSystemCallNumber is within range
-        *    because the assembly SVC handler checks that before calling
-        *    this function.
-        */
+     * 1. SVC is raised from the system call section (i.e. application is
+     *    not raising SVC directly).
+     * 2. pxMpuSettings->xSystemCallStackInfo.pulTaskStack must be NULL as
+     *    it is non-NULL only during the execution of a system call (i.e.
+     *    between system call enter and exit).
+     * 3. System call is not for a kernel API disabled by the configuration
+     *    in FreeRTOSConfig.h.
+     * 4. We do not need to check that ucSystemCallNumber is within range
+     *    because the assembly SVC handler checks that before calling
+     *    this function.
+     */
     if( ( ulSystemCallLocation >= ( uint32_t ) __syscalls_flash_start__ ) &&
         ( ulSystemCallLocation <= ( uint32_t ) __syscalls_flash_end__ ) &&
         ( pxMpuSettings->xSystemCallStackInfo.pulTaskStack == NULL ) &&
@@ -722,26 +720,27 @@ void vSystemCallEnter( uint32_t * pulTaskStack,
         }
 
         /* Store the value of the Link Register before the SVC was raised.
-            * It contains the address of the caller of the System Call entry
-            * point (i.e. the caller of the MPU_<API>). We need to restore it
-            * when we exit from the system call. */
+         * It contains the address of the caller of the System Call entry
+         * point (i.e. the caller of the MPU_<API>). We need to restore it
+         * when we exit from the system call. */
         pxMpuSettings->xSystemCallStackInfo.ulLinkRegisterAtSystemCallEntry = pulTaskStack[ portOFFSET_TO_LR ];
 
         /* Use the pulSystemCallStack in thread mode. */
-        __asm volatile ( "msr psp, %0" : : "r" ( pulSystemCallStack ) );
+        portSET_PSP(pulSystemCallStack);
 
         /* Start executing the system call upon returning from this handler. */
         pulSystemCallStack[ portOFFSET_TO_PC ] = uxSystemCallImplementations[ ucSystemCallNumber ];
+
         /* Raise a request to exit from the system call upon finishing the
-            * system call. */
+         * system call. */
         pulSystemCallStack[ portOFFSET_TO_LR ] = ( uint32_t ) vRequestSystemCallExit;
 
         /* Remember the location where we should copy the stack frame when we exit from
-            * the system call. */
+         * the system call. */
         pxMpuSettings->xSystemCallStackInfo.pulTaskStack = pulTaskStack + ulStackFrameSize;
 
         /* Record if the hardware used padding to force the stack pointer
-            * to be double word aligned. */
+         * to be double word aligned. */
         if( ( pulTaskStack[ portOFFSET_TO_PSR ] & portPSR_STACK_PADDING_MASK ) == portPSR_STACK_PADDING_MASK )
         {
             pxMpuSettings->ulTaskFlags |= portSTACK_FRAME_HAS_PADDING_FLAG;
@@ -752,19 +751,12 @@ void vSystemCallEnter( uint32_t * pulTaskStack,
         }
 
         /* We ensure in pxPortInitialiseStack that the system call stack is
-            * double word aligned and therefore, there is no need of padding.
-            * Clear the bit[9] of stacked xPSR. */
+         * double word aligned and therefore, there is no need of padding.
+         * Clear the bit[9] of stacked xPSR. */
         pulSystemCallStack[ portOFFSET_TO_PSR ] &= ( ~portPSR_STACK_PADDING_MASK );
 
         /* Raise the privilege for the duration of the system call. */
-        __asm volatile (
-            " .syntax unified     \n"
-            " mrs r0, control     \n" /* Obtain current control value. */
-            " movs r1, #1         \n" /* r1 = 1. */
-            " bics r0, r1         \n" /* Clear nPRIV bit. */
-            " msr control, r0     \n" /* Write back new control value. */
-            ::: "r0", "r1", "memory"
-            );
+        vRaisePrivilege();
     }
 }
 
@@ -772,7 +764,7 @@ void vSystemCallEnter( uint32_t * pulTaskStack,
 
 void vRequestSystemCallExit( void ) /* __attribute__( ( naked ) ) PRIVILEGED_FUNCTION */
 {
-    __asm volatile ( "svc %0 \n" ::"i" ( portSVC_SYSTEM_CALL_EXIT ) : "memory" );
+	portREQUEST_SYS_CALL_EXIT();
 }
 
 /* ----------------------------------------------------------------------------------- */
@@ -800,14 +792,14 @@ void vSystemCallExit( uint32_t * pulSystemCallStack,
     pxMpuSettings = xTaskGetMPUSettings( pxCurrentTCB );
 
     /* Checks:
-        * 1. SVC is raised from the privileged code (i.e. application is not
-        *    raising SVC directly). This SVC is only raised from
-        *    vRequestSystemCallExit which is in the privileged code section.
-        * 2. pxMpuSettings->xSystemCallStackInfo.pulTaskStack must not be NULL -
-        *    this means that we previously entered a system call and the
-        *    application is not attempting to exit without entering a system
-        *    call.
-        */
+     * 1. SVC is raised from the privileged code (i.e. application is not
+     *    raising SVC directly). This SVC is only raised from
+     *    vRequestSystemCallExit which is in the privileged code section.
+     * 2. pxMpuSettings->xSystemCallStackInfo.pulTaskStack must not be NULL -
+     *    this means that we previously entered a system call and the
+     *    application is not attempting to exit without entering a system
+     *    call.
+     */
     if( ( ulSystemCallLocation >= ( uint32_t ) __privileged_functions_start__ ) &&
         ( ulSystemCallLocation <= ( uint32_t ) __privileged_functions_end__ ) &&
         ( pxMpuSettings->xSystemCallStackInfo.pulTaskStack != NULL ) )
@@ -826,17 +818,18 @@ void vSystemCallExit( uint32_t * pulSystemCallStack,
         }
 
         /* Use the pulTaskStack in thread mode. */
-        __asm volatile ( "msr psp, %0" : : "r" ( pulTaskStack ) );
+        portSET_PSP( pulTaskStack );
 
         /* Return to the caller of the System Call entry point (i.e. the
-            * caller of the MPU_<API>). */
+         * caller of the MPU_<API>). */
         pulTaskStack[ portOFFSET_TO_PC ] = pxMpuSettings->xSystemCallStackInfo.ulLinkRegisterAtSystemCallEntry;
+
         /* Ensure that LR has a valid value.*/
         pulTaskStack[ portOFFSET_TO_LR ] = pxMpuSettings->xSystemCallStackInfo.ulLinkRegisterAtSystemCallEntry;
 
         /* If the hardware used padding to force the stack pointer
-            * to be double word aligned, set the stacked xPSR bit[9],
-            * otherwise clear it. */
+         * to be double word aligned, set the stacked xPSR bit[9],
+         * otherwise clear it. */
         if( ( pxMpuSettings->ulTaskFlags & portSTACK_FRAME_HAS_PADDING_FLAG ) == portSTACK_FRAME_HAS_PADDING_FLAG )
         {
             pulTaskStack[ portOFFSET_TO_PSR ] |= portPSR_STACK_PADDING_MASK;
@@ -850,14 +843,7 @@ void vSystemCallExit( uint32_t * pulSystemCallStack,
         pxMpuSettings->xSystemCallStackInfo.pulTaskStack = NULL;
 
         /* Drop the privilege before returning to the thread mode. */
-        __asm volatile (
-            " .syntax unified     \n"
-            " mrs r0, control     \n" /* Obtain current control value. */
-            " movs r1, #1         \n" /* r1 = 1. */
-            " orrs r0, r1         \n" /* Set nPRIV bit. */
-            " msr control, r0     \n" /* Write back new control value. */
-            ::: "r0", "r1", "memory"
-            );
+        vResetPrivilege();
     }
 }
 
@@ -1285,7 +1271,7 @@ BaseType_t xPortIsInsideInterrupt( void )
     /* Obtain the number of the currently executing interrupt. Interrupt Program
      * Status Register (IPSR) holds the exception number of the currently-executing
      * exception or zero for Thread mode.*/
-    __asm volatile ( "mrs %0, ipsr" : "=r" ( ulCurrentInterrupt )::"memory" );
+    portGET_IPSR( ulCurrentInterrupt );
 
     if( ulCurrentInterrupt == 0 )
     {
@@ -1402,9 +1388,9 @@ BaseType_t xPortIsAuthorizedToAccessKernelObject( int32_t lInternalIndexOfKernel
     if( xSchedulerRunning == pdFALSE )
     {
         /* Grant access to all the kernel objects before the scheduler
-            * is started. It is necessary because there is no task running
-            * yet and therefore, we cannot use the permissions of any
-            * task. */
+         * is started. It is necessary because there is no task running
+         * yet and therefore, we cannot use the permissions of any
+         * task. */
         xAccessGranted = pdTRUE;
     }
     else
