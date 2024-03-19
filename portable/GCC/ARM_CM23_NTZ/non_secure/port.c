@@ -726,7 +726,7 @@ void vSystemCallEnter( uint32_t * pulTaskStack,
         pxMpuSettings->xSystemCallStackInfo.ulLinkRegisterAtSystemCallEntry = pulTaskStack[ portOFFSET_TO_LR ];
 
         /* Use the pulSystemCallStack in thread mode. */
-        portSET_PSP(pulSystemCallStack);
+        vPortSetPSP(pulSystemCallStack);
 
         /* Start executing the system call upon returning from this handler. */
         pulSystemCallStack[ portOFFSET_TO_PC ] = uxSystemCallImplementations[ ucSystemCallNumber ];
@@ -818,7 +818,7 @@ void vSystemCallExit( uint32_t * pulSystemCallStack,
         }
 
         /* Use the pulTaskStack in thread mode. */
-        portSET_PSP( pulTaskStack );
+        vPortSetPSP( pulTaskStack );
 
         /* Return to the caller of the System Call entry point (i.e. the
          * caller of the MPU_<API>). */

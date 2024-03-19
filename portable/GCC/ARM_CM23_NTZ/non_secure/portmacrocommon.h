@@ -280,6 +280,9 @@ typedef struct MPU_SETTINGS
 /**
  * @brief Scheduler utilities.
  */
+//#define portYIELD()                 __asm volatile ( " svc %0 "  :: "i" ( portSVC_YIELD ) : "memory" )
+void    vRequestPortYield(void);
+#define portYIELD()               vRequestPortYield()
 #define portYIELD_WITHIN_API()    vPortYield()
 
 #define portNVIC_INT_CTRL_REG     ( *( ( volatile uint32_t * ) 0xe000ed04 ) )

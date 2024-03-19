@@ -111,4 +111,15 @@ void vPortAllocateSecureContext( uint32_t ulSecureStackSize ) __attribute__( ( n
  */
 void vPortFreeSecureContext( uint32_t * pulTCB ) __attribute__( ( naked ) ) PRIVILEGED_FUNCTION;
 
+
+/**
+ * @brief Lowers the privilege level by setting the bit 0 of the CONTROL
+ * register.
+ *
+ * Bit 0 of the CONTROL register defines the privilege level of Thread Mode.
+ *  Bit[0] = 0 --> The processor is running privileged
+ *  Bit[0] = 1 --> The processor is running unprivileged.
+ */
+void vRequestPortYield( void ) __attribute__( ( naked ) );
+
 #endif /* __PORT_ASM_H__ */

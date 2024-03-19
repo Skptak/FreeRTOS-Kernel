@@ -170,38 +170,6 @@ BaseType_t xIsPrivileged( void ) /* __attribute__ (( naked )) */
 }
 /* ----------------------------------------------------------------------------------- */
 
-void vRaisePrivilege( void ) /* __attribute__ (( naked )) PRIVILEGED_FUNCTION */
-{
-    __asm volatile
-    (
-        "   .syntax unified                                 \n"
-        "                                                   \n"
-        "   mrs  r0, control                                \n" /* Read the CONTROL register. */
-        "   movs r1, #1                                     \n" /* r1 = 1. */
-        "   bics r0, r1                                     \n" /* Clear the bit 0. */
-        "   msr  control, r0                                \n" /* Write back the new CONTROL value. */
-        "   bx lr                                           \n" /* Return to the caller. */
-        ::: "r0", "r1", "memory"
-    );
-}
-/* ----------------------------------------------------------------------------------- */
-
-void vResetPrivilege( void ) /* __attribute__ (( naked )) */
-{
-    __asm volatile
-    (
-        "   .syntax unified                                 \n"
-        "                                                   \n"
-        "   mrs r0, control                                 \n" /* r0 = CONTROL. */
-        "   movs r1, #1                                     \n" /* r1 = 1. */
-        "   orrs r0, r1                                     \n" /* r0 = r0 | r1. */
-        "   msr control, r0                                 \n" /* CONTROL = r0. */
-        "   bx lr                                           \n" /* Return to the caller. */
-        ::: "r0", "r1", "memory"
-    );
-}
-/* ----------------------------------------------------------------------------------- */
-
 void vStartFirstTask( void ) /* __attribute__ (( naked )) PRIVILEGED_FUNCTION */
 {
     /* Don't reset the MSP stack as is done on CM3/4 devices. The vector table
