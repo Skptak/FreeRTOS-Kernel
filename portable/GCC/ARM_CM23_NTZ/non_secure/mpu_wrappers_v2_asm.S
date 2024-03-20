@@ -49,17 +49,6 @@ vPortYield:
     SVC     #portSVC_YIELD
     BX      LR
 
-
-/*
- * void vPortYieldISR( void );
- */
-.align 4
-.global vPortYieldISR
-.type vPortYieldISR, %function
-vPortYieldISR:
-    SVC     #portSVC_YIELD
-    BX      LR
-
 /* ----------------------------------------------------------------------------------- */
 
 /*
@@ -73,6 +62,5 @@ xPortGetIPSR:
     BX      LR
 
 /* ----------------------------------------------------------------------------------- */
-
 
 .end
