@@ -575,7 +575,7 @@ void vPortRequestYield( void ) /* PRIVILEGED_FUNCTION */
 
     /* Barriers are normally not required but do ensure the code is
      * completely within the specified behaviour for the architecture. */
-    portCACHE_FLUSH();
+    vPortPipelineFlush();
 }
 /* ----------------------------------------------------------------------------------- */
 
@@ -586,7 +586,7 @@ void vPortEnterCritical( void ) /* PRIVILEGED_FUNCTION */
 
     /* Barriers are normally not required but do ensure the code is
      * completely within the specified behaviour for the architecture. */
-    portCACHE_FLUSH();
+    vPortPipelineFlush();
 }
 /* ----------------------------------------------------------------------------------- */
 
@@ -747,7 +747,7 @@ void vSystemCallEnter( uint32_t * pulTaskStack,
         pulSystemCallStack[ portOFFSET_TO_PSR ] &= ( ~portPSR_STACK_PADDING_MASK );
 
         /* Raise the privilege for the duration of the system call. */
-        vRaisePrivilege();
+        //vRaisePrivilege();
     }
 }
 
@@ -763,13 +763,13 @@ void vSystemCallExit( uint32_t * pulSystemCallStack,
 
     #if defined( __ARMCC_VERSION )
         /* Declaration when these variable are defined in code instead of being
-            * exported from linker scripts. */
-        extern uint32_t * __privileged_functions_start__;
-        extern uint32_t * __privileged_functions_end__;
+		 * exported from linker scripts. */
+        extern uint32_t * __syscalls_flash_start__;
+        extern uint32_t * __syscalls_flash_end__;
     #else
         /* Declaration when these variable are exported from linker scripts. */
-        extern uint32_t __privileged_functions_start__[];
-        extern uint32_t __privileged_functions_end__[];
+		extern uint32_t __syscalls_flash_start__[];
+		extern uint32_t __syscalls_flash_end__[];
     #endif /* #if defined( __ARMCC_VERSION ) */
 
     ulSystemCallLocation = pulSystemCallStack[ portOFFSET_TO_PC ];
@@ -784,8 +784,8 @@ void vSystemCallExit( uint32_t * pulSystemCallStack,
      *    application is not attempting to exit without entering a system
      *    call.
      */
-    if( ( ulSystemCallLocation >= ( uint32_t ) __privileged_functions_start__ ) &&
-        ( ulSystemCallLocation <= ( uint32_t ) __privileged_functions_end__ ) &&
+    if( ( ulSystemCallLocation >= ( uint32_t ) __syscalls_flash_start__ ) &&
+		( ulSystemCallLocation <= ( uint32_t ) __syscalls_flash_end__ ) &&
         ( pxMpuSettings->xSystemCallStackInfo.pulTaskStack != NULL ) )
     {
         pulTaskStack = pxMpuSettings->xSystemCallStackInfo.pulTaskStack;

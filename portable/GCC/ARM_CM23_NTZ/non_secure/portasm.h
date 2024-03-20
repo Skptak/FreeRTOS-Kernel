@@ -121,7 +121,7 @@ void vPortSetPSP( uint32_t * pulTaskStack ) PRIVILEGED_FUNCTION;
 /**
  * @brief Flush the data and instruction caches.
  */
-void vPortPipelineFlush( void ) __attribute__( ( naked ) ) PRIVILEGED_FUNCTION;
+extern void vPortPipelineFlush( void ) __attribute__( ( naked ) ) PRIVILEGED_FUNCTION;
 
 /* ------------------------- mpu_wrappers_v2_asm.S Functions ------------------------- */
 

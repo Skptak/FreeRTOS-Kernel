@@ -107,19 +107,6 @@ vResetPrivilege:
 /* ----------------------------------------------------------------------------------- */
 
 /*
- * void vPortSystemCallExit( void );
- */
-.align 4
-.global vRequestSystemCallExit
-.type vRequestSystemCallExit, %function
-vRequestSystemCallExit:
-    SVC     #portSVC_SYSTEM_CALL_EXIT
-    LDR		R0, =vAssertCalled
-    MOV		PC, R0
-
-/* ----------------------------------------------------------------------------------- */
-
-/*
  * void vPortSetPSP( uint32_t * pulStack )
  */
 .align 4

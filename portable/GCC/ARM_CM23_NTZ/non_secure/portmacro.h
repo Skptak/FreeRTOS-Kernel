@@ -76,7 +76,7 @@
 
 extern void vPortEnableInterrupts( void ) __attribute__( ( naked ) ) /* PRIVILEGED_FUNCTION */;
 extern void vPortDisableInterrupts( void ) __attribute__( ( naked ) ) /* PRIVILEGED_FUNCTION */;
-extern void vPortPipelineFlush( void ) __attribute__( ( naked ) ) /* PRIVILEGED_FUNCTION */;
+//extern void vPortPipelineFlush( void ) __attribute__( ( naked ) ) /* PRIVILEGED_FUNCTION */;
 
 /**
  * @brief Critical section management.
@@ -87,7 +87,7 @@ extern void vPortPipelineFlush( void ) __attribute__( ( naked ) ) /* PRIVILEGED_
 
 #define portDISABLE_INTERRUPTS()    vPortEnableInterrupts()
 #define portENABLE_INTERRUPTS()     vPortDisableInterrupts();
-#define portCACHE_FLUSH()           vPortPipelineFlush();
+//#define portCACHE_FLUSH()           vPortPipelineFlush();
 
 #if 0
 #define portCACHE_FLUSH()           __asm volatile (  " dsb  \n"        \
