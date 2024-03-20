@@ -43,7 +43,7 @@
     .extern vSVCHandler_C
     .extern vSystemCallEnter
     .extern vSystemCallExit
-
+	.extern vAssertCalled
     #define portSVC_SYSTEM_CALL_EXIT           104
 
 /* ----------------------------------------------------------------------------------- */
@@ -96,12 +96,12 @@ vRaisePrivilege:
 .global vResetPrivilege
 .type vResetPrivilege, %function
 vResetPrivilege:
-    PUSH    { R0, R1 }
+    PUSH    { R0, R1, LR }
     MRS     R0, control     /* r0 = CONTROL. */
     MOVS    R1, #1          /* r1 = 1. */
     ORRS    R0, R1          /* r0 = r0 | r1. */
     MSR     control, R0     /* CONTROL = r0. */
-    POP     { R0, R1 }
+    POP     { R0, R1, PC }
     BX      LR              /* Return to the caller. */
 
 /* ----------------------------------------------------------------------------------- */
@@ -114,6 +114,8 @@ vResetPrivilege:
 .type vRequestSystemCallExit, %function
 vRequestSystemCallExit:
     SVC     #portSVC_SYSTEM_CALL_EXIT
+    LDR		R0, =vAssertCalled
+    MOV		PC, R0
 
 /* ----------------------------------------------------------------------------------- */
 
@@ -124,8 +126,9 @@ vRequestSystemCallExit:
 .global vPortSetPSP
 .type vPortSetPSP, %function
 vPortSetPSP:
+    PUSH    { LR }
     MSR     PSP, R0
-    BX      LR
+    POP     { PC }
 
 /* ----------------------------------------------------------------------------------- */
 
@@ -136,9 +139,10 @@ vPortSetPSP:
 .global vPortPipelineFlush
 .type vPortPipelineFlush, %function
 vPortPipelineFlush:
+    PUSH    { LR }
     DSB
     ISB
-    BX      LR
+    POP     { PC }
 
 /* ----------------------------------------------------------------------------------- */
 

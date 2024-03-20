@@ -46,8 +46,9 @@
 .global vPortYield
 .type vPortYield, %function
 vPortYield:
+    PUSH    { LR }
     SVC     #portSVC_YIELD
-    BX      LR
+    POP     { PC }
 
 /* ----------------------------------------------------------------------------------- */
 
@@ -58,8 +59,9 @@ vPortYield:
 .global xPortGetIPSR
 .type xPortGetIPSR, %function
 xPortGetIPSR:
+    PUSH    { LR }
     MRS     R0, IPSR
-    BX      LR
+    POP     { PC }
 
 /* ----------------------------------------------------------------------------------- */
 

@@ -74,16 +74,26 @@
 #endif
 /* ----------------------------------------------------------------------------------- */
 
+extern void vPortEnableInterrupts( void ) __attribute__( ( naked ) ) /* PRIVILEGED_FUNCTION */;
+extern void vPortDisableInterrupts( void ) __attribute__( ( naked ) ) /* PRIVILEGED_FUNCTION */;
+extern void vPortPipelineFlush( void ) __attribute__( ( naked ) ) /* PRIVILEGED_FUNCTION */;
+
 /**
  * @brief Critical section management.
  */
-#define portDISABLE_INTERRUPTS()    __asm volatile ( " cpsid i " ::: "memory" )
-#define portENABLE_INTERRUPTS()     __asm volatile ( " cpsie i " ::: "memory" )
+//#define portDISABLE_INTERRUPTS()    __asm volatile ( " cpsid i " ::: "memory" )
+//#define portENABLE_INTERRUPTS()     __asm volatile ( " cpsie i " ::: "memory" )
 
+
+#define portDISABLE_INTERRUPTS()    vPortEnableInterrupts()
+#define portENABLE_INTERRUPTS()     vPortDisableInterrupts();
+#define portCACHE_FLUSH()           vPortPipelineFlush();
+
+#if 0
 #define portCACHE_FLUSH()           __asm volatile (  " dsb  \n"        \
                                                       " isb  \n"        \
                                                       ::: "memory" )
-
+#endif
 
 /**
  * @brief Scheduler utilities.
