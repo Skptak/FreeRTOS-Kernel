@@ -49,18 +49,6 @@
 /* ----------------------------------------------------------------------------------- */
 
 /*
- * void vPortSetPSP( uint32_t pulTaskStack )
- */
-.align 4
-.global vPortSetPSP
-.type vPortSetPSP, %function
-vPortSetPSP:
-    MSR     PSP, R0
-    BX      LR
-
-/* ----------------------------------------------------------------------------------- */
-
-/*
  * void vPortDisableInterrupts( void );
  */
 .align 4
@@ -85,19 +73,6 @@ vPortEnableInterrupts:
 /* ----------------------------------------------------------------------------------- */
 
 /*
- * void vPortPipelineFlush( void );
- */
-.align 4
-.global vPortPipelineFlush
-.type vPortPipelineFlush, %function
-vPortPipelineFlush:
-    DSB
-    ISB
-    BX      LR
-
-/* ----------------------------------------------------------------------------------- */
-
-/*
  * void vRaisePrivilege( void );
  */
 .align 4
@@ -112,12 +87,10 @@ vRaisePrivilege:
     POP     { R0,R1 }
     BX      LR              /* Return to the caller. */
 
-
-
 /* ----------------------------------------------------------------------------------- */
 
 /*
- * void vPortRaisePrivilege( void );
+ * void vResetPrivilege( void );
  */
 .align 4
 .global vResetPrivilege
@@ -131,19 +104,6 @@ vResetPrivilege:
     POP     { R0, R1 }
     BX      LR              /* Return to the caller. */
 
-
-/* ----------------------------------------------------------------------------------- */
-
-/*
- * uint32_t xPortGetIPSR( void );
- */
-.align 4
-.global xPortGetIPSR
-.type xPortGetIPSR, %function
-xPortGetIPSR:
-    MRS     R0, IPSR
-    BX      LR
-
 /* ----------------------------------------------------------------------------------- */
 
 /*
@@ -154,6 +114,31 @@ xPortGetIPSR:
 .type vRequestSystemCallExit, %function
 vRequestSystemCallExit:
     SVC     #portSVC_SYSTEM_CALL_EXIT
+
+/* ----------------------------------------------------------------------------------- */
+
+/*
+ * void vPortSetPSP( uint32_t * pulStack )
+ */
+.align 4
+.global vPortSetPSP
+.type vPortSetPSP, %function
+vPortSetPSP:
+    MSR     PSP, R0
+    BX      LR
+
+/* ----------------------------------------------------------------------------------- */
+
+/*
+ * void vPortPipelineFlush( void );
+ */
+.align 4
+.global vPortPipelineFlush
+.type vPortPipelineFlush, %function
+vPortPipelineFlush:
+    DSB
+    ISB
+    BX      LR
 
 /* ----------------------------------------------------------------------------------- */
 

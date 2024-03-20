@@ -84,8 +84,41 @@
                                                       " isb  \n"        \
                                                       ::: "memory" )
 
-#define portGET_IPSR( ulCurrentInterrupt )  __asm volatile ( "mrs %0, ipsr" : "=r" ( ulCurrentInterrupt )::"memory" );
+/**
+ * @brief Raise SVC to cause a Pending SVC.
+ */
+extern void vPortYield( void ) __attribute__( ( naked ) ) /* FREERTOS_SYSTEM_CALL */;
 
+/**
+ * @brief Raise SVC to cause a Pending SVC.
+ */
+extern void vPortRequestYield( void ) /* PRIVILEGED_FUNCTION */;
+
+
+#if 0
+/**
+ * @brief Scheduler utilities.
+ */
+#define portYIELD()               vPortYield()
+#define portYIELD_WITHIN_API()    vPortYield()
+
+#else
+
+/**
+ * @brief Scheduler utilities.
+ */
+#define portYIELD()                 __asm volatile ( " svc %0 "  :: "i" ( portSVC_YIELD ) : "memory" )
+
+//extern void vPortRequestYield(void);
+//extern void vPortYield( void )      /* PRIVILEGED_FUNCTION */;
+//extern void vPortYieldISR( void )   /* PRIVILEGED_FUNCTION */;
+//#define portYIELD()               vPortYield()
+//#define portYIELD_WITHIN_API()    portYIELD()
+//#define portYIELD()               __asm volatile ( "svc %0" ::"i" ( portSVC_YIELD ) : "memory" )
+#define portYIELD_WITHIN_API()    vPortRequestYield()
+
+
+#endif
 /* ----------------------------------------------------------------------------------- */
 
 /* *INDENT-OFF* */

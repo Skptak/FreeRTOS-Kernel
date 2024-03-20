@@ -43,10 +43,33 @@
  * void vPortYield( void );
  */
 .align 4
-.global vRequestPortYield
-.type vRequestPortYield, %function
-vRequestPortYield:
+.global vPortYield
+.type vPortYield, %function
+vPortYield:
     SVC     #portSVC_YIELD
+    BX      LR
+
+
+/*
+ * void vPortYieldISR( void );
+ */
+.align 4
+.global vPortYieldISR
+.type vPortYieldISR, %function
+vPortYieldISR:
+    SVC     #portSVC_YIELD
+    BX      LR
+
+/* ----------------------------------------------------------------------------------- */
+
+/*
+ * uint32_t xPortGetIPSR( void );
+ */
+.align 4
+.global xPortGetIPSR
+.type xPortGetIPSR, %function
+xPortGetIPSR:
+    MRS     R0, IPSR
     BX      LR
 
 /* ----------------------------------------------------------------------------------- */

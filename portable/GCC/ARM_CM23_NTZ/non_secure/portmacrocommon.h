@@ -108,8 +108,6 @@ typedef unsigned long    UBaseType_t;
  */
 extern BaseType_t xPortIsInsideInterrupt( void );
 
-extern void vPortYield( void ) /* PRIVILEGED_FUNCTION */;
-
 extern void vPortEnterCritical( void ) /* PRIVILEGED_FUNCTION */;
 extern void vPortExitCritical( void ) /* PRIVILEGED_FUNCTION */;
 
@@ -276,14 +274,6 @@ typedef struct MPU_SETTINGS
 #define portSVC_SYSTEM_CALL_EXIT           104
 #define portSVC_YIELD                      105
 /* ----------------------------------------------------------------------------------- */
-
-/**
- * @brief Scheduler utilities.
- */
-//#define portYIELD()                 __asm volatile ( " svc %0 "  :: "i" ( portSVC_YIELD ) : "memory" )
-void    vRequestPortYield(void);
-#define portYIELD()               vRequestPortYield()
-#define portYIELD_WITHIN_API()    vPortYield()
 
 #define portNVIC_INT_CTRL_REG     ( *( ( volatile uint32_t * ) 0xe000ed04 ) )
 #define portNVIC_PENDSVSET_BIT    ( 1UL << 28UL )

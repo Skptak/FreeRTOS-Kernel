@@ -242,7 +242,7 @@ typedef void ( * portISR_t )( void );
  * Bit[1] - 0 --> Reserved, 0.
  * Bit[0] - 0 --> Reserved, 1.
  */
-    #define portINITIAL_EXC_RETURN    ( 0xfffffffdUL )
+#define portINITIAL_EXC_RETURN    ( 0xfffffffdUL )
 
 /**
  * @brief CONTROL register privileged bit mask.
@@ -290,12 +290,6 @@ typedef void ( * portISR_t )( void );
  */
 #define portPRELOAD_REGISTERS    1
 
-/**
- * @brief A task is created without a secure context, and must call
- * portALLOCATE_SECURE_CONTEXT() to give itself a secure context before it makes
- * any secure calls.
- */
-#define portNO_SECURE_CONTEXT    0
 /* ----------------------------------------------------------------------------------- */
 
 /**
@@ -312,12 +306,12 @@ static void prvTaskExitError( void );
  *
  * @return uint32_t Access permissions.
  */
-    static uint32_t prvGetRegionAccessPermissions( uint32_t ulRASRValue ) PRIVILEGED_FUNCTION;
+static uint32_t prvGetRegionAccessPermissions( uint32_t ulRASRValue ) PRIVILEGED_FUNCTION;
 
 /**
  * @brief Setup the Memory Protection Unit (MPU).
  */
-    static void prvSetupMPU( void ) PRIVILEGED_FUNCTION;
+static void prvSetupMPU( void ) PRIVILEGED_FUNCTION;
 
 /**
  * @brief Setup the timer to generate the tick interrupts.
@@ -333,12 +327,12 @@ void vPortSetupTimerInterrupt( void ) PRIVILEGED_FUNCTION;
  * @return pdTRUE if the current execution context is interrupt, pdFALSE
  * otherwise.
  */
-BaseType_t xPortIsInsideInterrupt( void );
+BaseType_t xPortIsInsideInterrupt( void ) FREERTOS_SYSTEM_CALL;
 
 /**
- * @brief Yield the processor.
+ * @brief Raise a pending SVC to yield the processor.
  */
-void vPortYield( void ) PRIVILEGED_FUNCTION;
+void vPortRequestYield( void ) PRIVILEGED_FUNCTION;
 
 /**
  * @brief Enter critical section.
@@ -395,7 +389,7 @@ BaseType_t xPortIsTaskPrivileged( void ) PRIVILEGED_FUNCTION;
 /**
  * @brief This variable is set to pdTRUE when the scheduler is started.
  */
-    PRIVILEGED_DATA static BaseType_t xSchedulerRunning = pdFALSE;
+PRIVILEGED_DATA static BaseType_t xSchedulerRunning = pdFALSE;
 
 /**
  * @brief Each task maintains its own interrupt status in the critical nesting
@@ -574,7 +568,7 @@ static void prvSetupMPU( void ) /* PRIVILEGED_FUNCTION */
 }
 /* ----------------------------------------------------------------------------------- */
 
-void vPortYield( void ) /* PRIVILEGED_FUNCTION */
+void vPortRequestYield( void ) /* PRIVILEGED_FUNCTION */
 {
     /* Set a PendSV to request a context switch. */
     portNVIC_INT_CTRL_REG = portNVIC_PENDSVSET_BIT;
@@ -651,7 +645,7 @@ void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) /* PRIVILEGED_FUNCTIO
             break;
 
         case portSVC_YIELD:
-            vPortYield();
+            vPortRequestYield();
             break;
 
         default:
@@ -722,7 +716,8 @@ void vSystemCallEnter( uint32_t * pulTaskStack,
         pxMpuSettings->xSystemCallStackInfo.ulLinkRegisterAtSystemCallEntry = pulTaskStack[ portOFFSET_TO_LR ];
 
         /* Use the pulSystemCallStack in thread mode. */
-        vPortSetPSP(pulSystemCallStack);
+        vPortSetPSP( pulSystemCallStack );
+        //portSET_PSP( pulSystemCallStack );
 
         /* Start executing the system call upon returning from this handler. */
         pulSystemCallStack[ portOFFSET_TO_PC ] = uxSystemCallImplementations[ ucSystemCallNumber ];
@@ -1188,7 +1183,7 @@ BaseType_t xPortIsInsideInterrupt( void )
     /* Obtain the number of the currently executing interrupt. Interrupt Program
      * Status Register (IPSR) holds the exception number of the currently-executing
      * exception or zero for Thread mode.*/
-    portGET_IPSR( ulCurrentInterrupt );
+    ulCurrentInterrupt = xPortGetIPSR();
 
     if( ulCurrentInterrupt == 0 )
     {
