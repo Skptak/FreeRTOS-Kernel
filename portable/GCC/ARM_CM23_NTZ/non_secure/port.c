@@ -446,6 +446,12 @@ void vPortExitCritical( void ) PRIVILEGED_FUNCTION;
 void SysTick_Handler( void ) PRIVILEGED_FUNCTION;
 
 /**
+ * @brief Default Hardfault Handler.
+ */
+void HardFault_Handler( void ) PRIVILEGED_FUNCTION;
+
+
+/**
  * @brief C part of SVC handler.
  */
 portDONT_DISCARD void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) PRIVILEGED_FUNCTION;
@@ -782,6 +788,42 @@ PRIVILEGED_DATA StackType_t ulExceptionStack[configEXCEPTION_STACK_SIZE] = { 0UL
     }
 #endif /* configUSE_TICKLESS_IDLE */
 /*-----------------------------------------------------------*/
+
+void HardFault_Handler( void ) /* PRIVILEGED_FUNCTION */
+{
+    /* Disable the MPU. */
+    portMPU_CTRL_REG ^= portMPU_ENABLE_BIT;
+
+    /* Ensure interrupts are disabled. */
+    portDISABLE_INTERRUPTS();
+
+    volatile xFrPFaultExceptionInfo * pxPortAssertInfo;
+
+    /* Load stack used for unrecoverable faults.  */
+    __asm volatile (
+        " .extern ulExceptionStack  \n"
+        " .syntax unified           \n"
+        " ldr r3, =ulExceptionStack \n"
+        " ldr r4, =%1               \n"
+        " add r3, r4                \n" /* r3 = ulExceptionStack[configEXCEPTION_STACK_SIZE]. */
+        " mov sp, r3                \n" /* SP = ulExceptionStack[configEXCEPTION_STACK_SIZE]. */
+        " mrs %0, psp 				\n"
+        : "=r" ( pxPortAssertInfo )
+        : "i" ( configEXCEPTION_STACK_SIZE << 2)
+        : "r3", "r4", "memory"
+    );
+
+    /* Call user assert handler. */
+    vApplicationSafeAssertCallback ( NULL, pxPortAssertInfo ) ;
+
+    /* Should never return. */
+    portDISABLE_INTERRUPTS();
+
+    while ( 1 )
+    {
+        portNOP();
+    }
+}
 
 __attribute__( ( weak ) ) void vPortSetupTimerInterrupt( void ) /* PRIVILEGED_FUNCTION */
 {

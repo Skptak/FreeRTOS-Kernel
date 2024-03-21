@@ -91,17 +91,8 @@
 /**
  * @brief Info Pulled from from the CPU when a hardware exception occurs.
  */
-typedef struct CORTEX_RX_SAFE_ASSERT_FAULT_INFO
+typedef struct CORTEX_M0Plus_SAFE_ASSERT_FAULT_INFO
 {
-    /* Cortex-R Series Exception Diagnostics. */
-    uint32_t ulCPSR;    /* Current Program Status Register (CPSR). */
-    uint32_t ulDFSR;    /* Data Fault Status Register (DFSR). */
-    uint32_t ulIFSR;    /* Instruction Fault Status Register (IFSR). */
-    uint32_t ulADFSR;   /* Auxiliary Data Fault Status Register (ADFSR). */
-    uint32_t ulAIFSR;   /* Auxiliary Instruction Fault Status Register (AIFSR). */
-    uint32_t ulDFAR;    /* Data Fault Address Register (DFAR). */
-    uint32_t ulIFAR;    /* Instruction Fault Address Register (IFAR). */
-
     /* Arm-M Series Architecture Exception Stack. */
     uint32_t ulGPRZero;                 /* General Purpose Register 0 */
     uint32_t ulGPROne;                  /* General Purpose Register 1 */
