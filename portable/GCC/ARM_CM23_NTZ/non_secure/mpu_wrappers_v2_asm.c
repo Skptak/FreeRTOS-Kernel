@@ -46,12 +46,7 @@
 
 
 #if ( ( configENABLE_MPU == 1 ) && ( configUSE_MPU_WRAPPERS_V1 == 0 ) )
-#if 0
-    void MPU_vSafeAssertError( char * faultFile,
-                               char * faultFunction,
-                               size_t faultLine,
-                               uint32_t errCode ) __attribute__( ( naked ) ) FREERTOS_SYSTEM_CALL;
-#endif
+
     void MPU_vSafeAssertError( char * pcFile,
                                const char * pcFunc,
                                int ulLine,
