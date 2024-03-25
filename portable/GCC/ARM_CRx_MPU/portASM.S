@@ -37,6 +37,7 @@
 
     /* External FreeRTOS-Kernel variables. */
     .extern pxCurrentTCB
+    .extern ulExceptionStack
     .extern uxSystemCallImplementations
     .extern ulPortInterruptNesting
     .extern ulPortYieldRequired
@@ -48,6 +49,7 @@
     /* External FreeRTOS-Kernel functions. */
     .extern vTaskSwitchContext
     .extern vApplicationIRQHandler
+    .extern vApplicationSafeAssertCallback
 
 /* ----------------------------------------------------------------------------------- */
 
@@ -177,15 +179,6 @@ vPortStartFirstTask:
 FreeRTOS_SVC_Handler:
     PUSH    { R11-R12 }
 
-    /* ------------------------- Caller Flash Location Check ------------------------- */
-
-    LDR     R11, =__syscalls_flash_start__
-    LDR     R12, =__syscalls_flash_end__
-    CMP     LR, R11 /* If SVC instruction address is less than __syscalls_flash_start__, exit. */
-    BLT     svcHandlerExit
-    CMP     LR, R12 /* If SVC instruction address is greater than __syscalls_flash_end__, exit. */
-    BGT     svcHandlerExit
-
     /* ---------------------------- Get Caller SVC Number ---------------------------- */
 
     MRS     R11, SPSR               /* LR = CPSR at the time of SVC. */
@@ -196,6 +189,19 @@ FreeRTOS_SVC_Handler:
     BICEQ   R11, R11, #0xFF000000   /* And extract immidiate field (i.e. SVC number). */
 
     /* --------------------------------- SVC Routing --------------------------------- */
+
+    /* If the SVC is because a task triggered an ASSERT jump straight there. */
+    CMP     R11, #SYSTEM_CALL_vSafeAssert
+    BEQ     svcSafeAssert
+
+    /* ------------------------- Caller Flash Location Check ------------------------- */
+
+    LDR     R12, =__syscalls_flash_start__
+    CMP     LR, R12 /* If SVC instruction address is less than __syscalls_flash_start__, exit. */
+    BLT     svcHandlerExit
+    LDR     R12, =__syscalls_flash_end__
+    CMP     LR, R12 /* If SVC instruction address is greater than __syscalls_flash_end__, exit. */
+    BGT     svcHandlerExit
 
     /* If SVC Number < #NUM_SYSTEM_CALLS, go to svcSystemCallEnter. */
     CMP     R11, #NUM_SYSTEM_CALLS
@@ -212,6 +218,26 @@ FreeRTOS_SVC_Handler:
 svcHandlerExit:
     POP     { R11-R12 }
     MOVS    PC, LR /* Copies the SPSR into the CPSR, performing the mode swap. */
+
+svcSafeAssert:
+    CPSID   IF                      /* Ensure IRQs and FIQs are disabled */
+
+    MOV     R11, #(configEXCEPTION_STACK_SIZE << 2 )
+    LDR     SP, =ulExceptionStack   /* Load stack used exclusively for hardware faults. */
+    ADD     SP, SP, R11             /* SP = ulExceptionStack[configEXCEPTION_STACK_SIZE]. */
+
+    BL      vMPUDisable             /* Disable the MPU */
+
+    PUSH    { R0-R3 }               /* R0-R3 contains xFrKSafeAssertFaultInfo */
+    MOV     R0, SP                  /* R0 = xFrKSafeAssertFaultInfo . */
+    MOV     R1, 0                   /* Set xFrPFaultExceptionInfo to NULL. */
+    BL      vApplicationSafeAssertCallback
+
+    /* Returns are not allowed from vApplicationSafeAssertCallback */
+    CPSID   IF
+
+    svcSafeAssertLoop:
+        b   svcSafeAssertLoop
 
 svcPortYield:
     POP     { R11-R12 }
@@ -408,6 +434,71 @@ vMPUDisableBackgroundRegion:
 
     POP     { R0 }
     BX      LR
+
+/* ----------------------------------------------------------------------------------- */
+
+.align 4
+.global FreeRTOS_Exception_Handler
+.type FreeRTOS_Exception_Handler, %function
+FreeRTOS_Exception_Handler:
+    /* Hardware exception raised. The system cannot be trusted at this point.
+     * Disable IRQs, FIQs, and the MPU, create diagnostic info, execute user callback. */
+
+    CPSID   IF                      /* Ensure IRQs and FIQs are disabled */
+
+    /* Pull Cortex-Rx specific Fault Diagonstics before disabling the MPU. */
+    MRC     p15, 0, R4, c5, c0, 0   /* Data Fault Status Register. */
+    MRC     p15, 0, R5, c5, c0, 1   /* Instruction Fault Status Register. */
+    MRC     p15, 0, R6, c5, c1, 0   /* Auxiliary Data Fault Status Register. */
+    MRC     p15, 0, R7, c5, c1, 1   /* Auxiliary Instruction Fault Status Register. */
+    MRC     p15, 0, R8, c6, c0, 0   /* Data Fault Address Register. */
+    MRC     p15, 0, R9, c6, c0, 2   /* Instruction Fault Address Register. */
+    MRS     R10, CPSR               /* Current Program Status Register. */
+
+    /* Disable the MPU before accessing RAM. */
+    MRC     p15, #0, R11, c1, c0, #0 /* R11 = System Control Register (SCTLR). */
+    BIC     R11,  R11, #1 /* R11 = R11 & ~0x1. Clear the M bit in SCTLR. */
+    /* Wait for all pending data accesses to complete. */
+    DSB
+    MCR     p15, #0, R11, c1, c0, #0 /* SCTLR = R11. */
+    /* Flush the pipeline and prefetch buffer(s) in the processor to ensure that
+    *  all following instructions are fetched from cache or memory. */
+    ISB
+
+    MOV     R11, #(configEXCEPTION_STACK_SIZE << 2 )
+    LDR     SP, =ulExceptionStack   /* Load stack used exclusively for hardware faults. */
+    ADD     SP, SP, R11             /* SP = ulExceptionStack[configEXCEPTION_STACK_SIZE]. */
+
+    /* Create a Exception Fault Stack similiar to the way it is created by the ARMvM
+     * architecture. The auto-pushed exception stack will contain:
+     * +-------+-----+----------+----------+------+
+     * | R0-R3 | R12 | LR (R14) | PC (R15) | CPSR |
+     * +-------+-----+----------+----------+------+
+     *
+     * <-------><----><---------><---------><----->
+     *     4      1        1         1         1
+     */
+
+    /* Save the PC and CPSR at time of ASSERT. Can't use SRS as we do not know
+     * the current operating mode of the CPU.
+     * PUSH { R11, LR } would be out of order, so need two individual pushes. */
+    MRS     R11, SPSR
+    PUSH    { R11 }
+    PUSH    { LR }
+
+
+    STMDB   SP, { R0-R3, R12, LR }^ /* Save the user R0-R3, R12, and LR */
+    SUB     SP, SP, #0x18           /* Can't auto-increment SP with ^ operator */
+
+    PUSH    { R4-R10 }              /* Create the xFrPFaultExceptionInfo struct */
+
+    MOV     R0, 0                   /* Set xFrKSafeAssertFaultInfo to NULL. */
+    MOV     R1, SP                  /* R1 = xFrPFaultExceptionInfo. */
+    BL      vApplicationSafeAssertCallback
+
+    /* Returns are not allowed from vApplicationSafeAssertCallback. */
+    CPSID   IF
+
 
 /* ----------------------------------------------------------------------------------- */
 

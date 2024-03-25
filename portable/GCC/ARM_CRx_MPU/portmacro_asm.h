@@ -272,6 +272,13 @@ extern "C" {
         1U /* ulTaskFlags. */                   \
       ) * 4U )
 
+/**
+ * @brief Size in words to use for an exception stack, used when an assert is triggered.
+ */
+#ifndef configEXCEPTION_STACK_SIZE
+    #define configEXCEPTION_STACK_SIZE 0x200
+#endif /* configEXCEPTION_STACK_SIZE */
+
 #ifdef __cplusplus
 } /* extern C */
 #endif

@@ -97,6 +97,25 @@ ulPortCountLeadingZeros:
     CLZ     R0, R0
     BX      LR
 
+/*
+ * void MPU_vSafeAssertError( char * faultFile,
+                     char * faultFunction,
+                     size_t faultLine,
+                     uint32_t errCode );
+ * Called when a FreeRTOS_Assert fails.
+ * There is no returning back to normal code execution when this occurs.
+ */
+.align 4
+.global MPU_vSafeAssertError
+.type MPU_vSafeAssertError, function
+MPU_vSafeAssertError:
+    SVC     #SYSTEM_CALL_vSafeAssert
+    CPSID   IF
+    MPUWrappers_ExceptionLoop:
+        B   MPUWrappers_ExceptionLoop
+
+/* ----------------------------------------------------------------------------------- */
+
 /* ------------------- End of Port Specific System Calls ------------------- */
 
 .macro INVOKE_SYSTEM_CALL systemCallNumber, systemCallImpl
@@ -108,6 +127,16 @@ ulPortCountLeadingZeros:
     SVCEQ   \systemCallNumber
     B       \systemCallImpl
 .endm
+
+/* ----------------------------------------------------------------------------------- */
+
+
+.extern xApplicationPrivilegedCallback
+.align 4
+.global MPU_xPrivilegedCallback
+.type MPU_xPrivilegedCallback, function
+MPU_xPrivilegedCallback:
+    INVOKE_SYSTEM_CALL #SYSTEM_CALL_xPrivilegedCallback, xApplicationPrivilegedCallback
 
 /* ----------------------------------------------------------------------------------- */
 

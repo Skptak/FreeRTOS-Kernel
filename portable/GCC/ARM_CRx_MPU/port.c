@@ -86,6 +86,11 @@ PRIVILEGED_DATA volatile UBaseType_t ulPortInterruptNesting = 0UL;
  */
 PRIVILEGED_DATA static BaseType_t prvPortSchedulerRunning = pdFALSE;
 
+/**
+ * @brief Stack to use when an un-recoverable error occurs.
+ */
+PRIVILEGED_DATA StackType_t ulExceptionStack[configEXCEPTION_STACK_SIZE] = { 0UL };
+
 /* -------------------------- Private Function Declarations -------------------------- */
 
 /**
@@ -456,6 +461,8 @@ BaseType_t xPortStartScheduler( void )
 
     prvPortSchedulerRunning = pdTRUE;
 
+    configASSERT( ulExceptionStack != NULL );
+    safeASSERT( configEXCEPTION_STACK_SIZE % 2 == 0U );
     /* Load the context of the first task. */
     vPortStartFirstTask();
 
