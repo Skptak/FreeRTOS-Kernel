@@ -5221,7 +5221,7 @@
             ( UBaseType_t ) MPU_xStreamBufferSpacesAvailableImpl,           /* SYSTEM_CALL_xStreamBufferSpacesAvailable. */
             ( UBaseType_t ) MPU_xStreamBufferBytesAvailableImpl,            /* SYSTEM_CALL_xStreamBufferBytesAvailable. */
             ( UBaseType_t ) MPU_xStreamBufferSetTriggerLevelImpl,           /* SYSTEM_CALL_xStreamBufferSetTriggerLevel. */
-            ( UBaseType_t ) MPU_xStreamBufferNextMessageLengthBytesImpl     /* SYSTEM_CALL_xStreamBufferNextMessageLengthBytes. */
+            ( UBaseType_t ) MPU_xStreamBufferNextMessageLengthBytesImpl,     /* SYSTEM_CALL_xStreamBufferNextMessageLengthBytes. */
         #else
             ( UBaseType_t ) 0,                                              /* SYSTEM_CALL_xStreamBufferSend. */
             ( UBaseType_t ) 0,                                              /* SYSTEM_CALL_xStreamBufferReceive. */
@@ -5232,7 +5232,7 @@
             ( UBaseType_t ) 0,                                              /* SYSTEM_CALL_xStreamBufferSetTriggerLevel. */
             ( UBaseType_t ) 0,                                              /* SYSTEM_CALL_xStreamBufferNextMessageLengthBytes. */
         #endif
-
+        ( UBaseType_t ) MPU_xPrivilegedCallback                             /* SYSTEM_CALL_xStreamBufferNextMessageLengthBytes. */
     };
 /*-----------------------------------------------------------*/
 
