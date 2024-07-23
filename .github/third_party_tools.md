@@ -5,7 +5,7 @@ team.
 | Tool | Website | Getting Started |
 |------|---------|-----------------|
 | Tracelyzer | [Link](https://percepio.com/tracealyzer/freertostrace/) | [Link](https://percepio.com/getstarted/latest/html/freertos.html) |
-| SystemView | [Link](https://www.segger.com/products/development-tools/systemview/) | [Link](https://wiki.segger.com/FreeRTOS_with_SystemView) |
+| SystemView | [Link](https://www.segger.com/products/development-tools/systemview/) | [Link](https://wiki.segger.com/FreeRTOS_with_SystemView/) |
 
 ## Static Code Analysis Tools
 | Tool | Website | Getting Started |
