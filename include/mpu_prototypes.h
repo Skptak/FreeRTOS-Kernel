@@ -74,6 +74,12 @@ typedef struct xEventGroupWaitBitsParams
     TickType_t xTicksToWait;
 } xEventGroupWaitBitsParams_t;
 
+/* Declaration of a hook for an unprivileged task to run a function while privileged. */
+void * MPU_xPrivilegedCallback( void * xPrivilegedParameters ) FREERTOS_SYSTEM_CALL;
+
+/** @brief Configure the hardware to start the scheduler timer. */
+void * xApplicationPrivilegedCallback( void * pxParameters ) PRIVILEGED_FUNCTION portDONT_DISCARD ;
+
 /* MPU versions of task.h API functions. */
 void MPU_vTaskDelay( const TickType_t xTicksToDelay ) FREERTOS_SYSTEM_CALL;
 BaseType_t MPU_xTaskDelayUntil( TickType_t * const pxPreviousWakeTime,
